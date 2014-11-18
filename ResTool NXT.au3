@@ -18,6 +18,7 @@
 #include <StaticConstants.au3>
 #include <TabConstants.au3>
 #include <WindowsConstants.au3>
+#include <ColorConstants.au3>
 #EndRegion ###Includes
 #Region ###Program Init and Loop
 Opt("GUIOnEventMode", 1)
@@ -118,6 +119,9 @@ Else
 	SetError(0)
 EndIf
 _GUICtrlStatusBar_SetText($statusbar1, "TT" & $ticketno, 2)
+If(_readregstats("MSCFG") == 1) Then
+	GUICtrlSetColor($msconfig, $COLOR_RED)
+EndIf
 GUISetOnEvent($gui_event_close, "_Close")
 GUICtrlSetOnEvent($combofix, "_RunCF")
 GUICtrlSetOnEvent($malwarebytes, "_RunMWB")
@@ -151,8 +155,7 @@ GUICtrlSetOnEvent($defrag, "_Defraggle")
 GUICtrlSetOnEvent($devmgr, "_Devmgmt")
 GUICtrlSetOnEvent($rmnac, "")
 GUICtrlSetStyle($rmnac, $ws_disabled)
-GUICtrlSetOnEvent($msconfig, "")
-GUICtrlSetStyle($msconfig, $ws_disabled)
+GUICtrlSetOnEvent($msconfig, "_togglemsconfig")
 GUICtrlSetOnEvent($regedit, "")
 GUICtrlSetStyle($regedit, $ws_disabled)
 GUICtrlSetOnEvent($nada, "")
@@ -952,7 +955,43 @@ EndFunc   ;==>_runcc
 
 #EndRegion ###Scanners
 #Region ###OS
+#cs -----------------------------------------------------------------------------
+FUNCTION: _togglemsconfig()
 
+PURPOSE: Toggles safe boot
+
+AUTHOR: Kevin Morgan
+
+DATE OF LAST UPDATE: 11/18/14
+
+NOTES:
+#ce -----------------------------------------------------------------------------
+Func _togglemsconfig()
+	Run("msconfig")
+	WinWait("System Configuration", "" )
+	WinActivate("System Configuration", "")
+	Sleep(100)
+	Send("^{TAB}")
+	IF(Not(_readregstats("MSCFG") == 1)) Then
+		ControlClick("System Configuration", "", "Button5")
+		Sleep(100)
+		ControlClick("System Configuration", "", "Button9")
+		Sleep(100)
+		ControlClick("System Configuration", "", "Button30")
+		WinWait("System Configuration", "You may need to restart your computer")
+		ControlClick("System Configuration", "", "Button3")
+		_writeregstats("MSCFG", 1)
+		GUICtrlSetColor($msconfig, $COLOR_RED)
+	Else
+		ControlClick("System Configuration", "", "Button5")
+		_writeregstats("MSCFG", 0)
+		Sleep(100)
+		ControlClick("System Configuration", "", "Button30")
+		WinWait("System Configuration", "You may need to restart your computer")
+		ControlClick("System Configuration", "", "Button3")
+		GUICtrlSetColor($msconfig, $COLOR_BLACK)
+	EndIf
+EndFunc
 #cs -----------------------------------------------------------------------------
 FUNCTION: _speedtest
 
