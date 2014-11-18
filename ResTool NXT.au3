@@ -3,7 +3,7 @@
 #AutoIt3Wrapper_Compression=4
 #AutoIt3Wrapper_Compile_both=y
 #AutoIt3Wrapper_Res_Description=Automation tool for Residential Technology Helpdesk of Northern Illinois University
-#AutoIt3Wrapper_Res_Fileversion=0.1.141023.0
+#AutoIt3Wrapper_Res_Fileversion=0.1.141118.2
 #RequireAdmin
 #include <GUIConstants.au3>
 #include <MsgBoxConstants.au3>
@@ -170,13 +170,13 @@ WEnd
 #EndRegion ###Program Init and Loop
 #Region ###Helpers
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _close()
 
-PURPOSE:
+PURPOSE: Exits the program. Invoked by $GUI_EVENT_CLOSE
 
-AUTHOR:
+AUTHOR: Kevin Morgan
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: A Long Time Ago
 
 NOTES:
 #ce-----------------------------------------------------------------------------
@@ -185,15 +185,16 @@ Func _close()
 EndFunc   ;==>_close
 
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _readableosv()
 
-PURPOSE:
+PURPOSE: Generates a user-readable string containing OS Version and Architecture
 
-AUTHOR:
+AUTHOR: Kevin Morgan
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: A Long Time Ago
 
-NOTES:
+NOTES: Will point out if you are using anything XP or older or we've never seen
+	   Gives UNSUPPORTED OS [arch] as string.
 #ce-----------------------------------------------------------------------------
 Func _readableosv()
 	Local $r = ""
@@ -220,30 +221,30 @@ Func _readableosv()
 EndFunc   ;==>_readableosv
 
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _runau3()
 
-PURPOSE:
+PURPOSE: Runs an external uncompiled AutoIt Script, uses Run() syntax
 
-AUTHOR:
+AUTHOR: Kevin Morgan via some code from the Intertubes
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: A Long Time Ago
 
-NOTES:
+NOTES: Not used, but not deprecated due to usefulness for testing.
 #ce-----------------------------------------------------------------------------
 Func _runau3($sfilepath, $sworkingdir = "", $ishowflag = @SW_SHOW, $ioptflag = 0)
 	Return Run('"' & @AutoItExe & '" /AutoIt3ExecuteScript "' & $sfilepath & '"', $sworkingdir, $ishowflag, $ioptflag)
 EndFunc   ;==>_runau3
 
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _setticket()
 
-PURPOSE:
+PURPOSE: Logs the computer's ticket number in the registry
 
-AUTHOR:
+AUTHOR: Kevin Morgan
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: A Long Time Ago
 
-NOTES:
+NOTES: Will keep prompting you until you enter something, no more error checking
 #ce-----------------------------------------------------------------------------
 Func _setticket()
 	Local $newtix = InputBox("Enter Ticket Number", "Please enter the computer's current ticket number:")
@@ -258,30 +259,36 @@ Func _setticket()
 EndFunc   ;==>_setticket
 
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _updatelastopen()
 
-PURPOSE:
+PURPOSE: Updates the timestamp on ResTool's last run
 
-AUTHOR:
+AUTHOR: Kevin Morgan
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: A Long Time Ago
 
-NOTES:
+NOTES: Relies on System RTC, if that is incorrect, this will be too.
 #ce-----------------------------------------------------------------------------
 Func _updatelastopen()
 	RegWrite("HKLM\SOFTWARE\ResTech", "LastOpen", "REG_SZ", _NowCalc())
 EndFunc   ;==>_updatelastopen
 
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _appendlog()
 
-PURPOSE:
+PURPOSE: Appends the logfile stored on ResFlash
 
-AUTHOR:
+AUTHOR: Kevin Morgan
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: A Long Time Ago
 
-NOTES:
+NOTES: Takes 3 arguments: update code, program name, [message]
+	   Codes:	1: Program/Process start
+				2: Error running program/process
+				3: Results of program/process (message required)
+				4: Program/Process completed
+				5: Miscellaneous message (message required)
+		No entry will be created for malformed data, specifically invalid code
 #ce-----------------------------------------------------------------------------
 Func _appendlog($code, $prog, $msg = "")
 	Local $log = StringLeft(@ScriptDir, 3) & "Logs\" & $ticketno & ".txt"
@@ -310,45 +317,49 @@ Func _appendlog($code, $prog, $msg = "")
 EndFunc   ;==>_appendlog
 
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _writeregstats()
 
-PURPOSE:
+PURPOSE: Creates and or modifies a registry entry of the given $shortcode
 
-AUTHOR:
+AUTHOR: Kevin Morgan
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: A Long Time Ago
 
-NOTES:
+NOTES: Not used. Implemented for future use in Auto mode. Log scans by using
+	   shortcodes like MWB, ESET, etc. Value should be numerical
 #ce-----------------------------------------------------------------------------
 Func _writeregstats($shortcode, $value)
 	RegWrite("HKLM\SOFTWARE\ResTech\AutoStats", $shortcode, "REG_SZ", $value)
 EndFunc   ;==>_writeregstats
 
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _readregstats()
 
-PURPOSE:
+PURPOSE: Gets the data from a registry entry of the given shortcode
 
-AUTHOR:
+AUTHOR: Kevin Morgan
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: A Long Time Ago
 
-NOTES:
+NOTES: Not used. Implemented for future use in Auto mode. Read scan data by
+	   using shortcodes like MWB, ESET, etc. Will fail if no key or data bad.
 #ce-----------------------------------------------------------------------------
 Func _readregstats($shortcode)
 	Return Number(RegRead("HKLM\SOFTWARE\ResTech\AutoStats", $shortcode))
 EndFunc   ;==>_readregstats
 
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _winwaitnotify()
 
-PURPOSE:
+PURPOSE: Wrapper for WinWait that pops up a messagebox if the timeout is reached
 
-AUTHOR:
+AUTHOR: Kevin Morgan
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: A Long Time Ago
 
-NOTES:
+NOTES: Due to incompatibilities with some processes, default timeout is set to
+	   0/unlimited, which renders this function pretty much useless.
+	   a better implementation is in the works with _waitclick
 #ce-----------------------------------------------------------------------------
 Func _winwaitnotify($title, $text, $controltitle, $timeout = 0)
 	If (WinWait($title, $text, $timeout) = 0) Then
@@ -357,30 +368,33 @@ Func _winwaitnotify($title, $text, $controltitle, $timeout = 0)
 EndFunc   ;==>_winwaitnotify
 
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _queuestartup()
 
-PURPOSE:
+PURPOSE: Creates a shortcut to run ResTool at startup
 
-AUTHOR:
+AUTHOR: Kevin Morgan
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: A Long Time Ago
 
-NOTES:
+NOTES: Really need an _unqueuestartup. Not Used. Planned for forced-restarts
+	   like in MWB and chkdsk /f
 #ce-----------------------------------------------------------------------------
 Func _queuestartup()
 	FileCreateShortcut(@ScriptFullPath, @StartupCommonDir & "\RT.lnk")
 EndFunc   ;==>_queuestartup
 
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _waitclick()
 
-PURPOSE:
+PURPOSE: Handles a WinWait/ControlClick combo where there is a possibility that
+		 AutoIt may miss the window
 
-AUTHOR:
+AUTHOR: Kevin Morgan
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: Somewhat Recently
 
-NOTES:
+NOTES: Not yet used. Default timeout is useless. Gives user option to terminate
+	   script. Needs timings or a better way to detect control clickability.
 #ce-----------------------------------------------------------------------------
 Func _waitclick($title, $text, $control, $timeout = 0)
 	If (WinWait($title, $text, $timeout) = 0) Then
@@ -398,15 +412,15 @@ EndFunc   ;==>_waitclick
 #Region ###Scanners
 
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _runcf()
 
-PURPOSE:
+PURPOSE: Runs ComboFix like a boss
 
-AUTHOR:
+AUTHOR: Kevin Morgan
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: Back in the day
 
-NOTES:
+NOTES: Can't currently handle the log.
 #ce-----------------------------------------------------------------------------
 Func _runcf()
 	Local $updated = 0
@@ -451,15 +465,15 @@ Func _runcf()
 EndFunc   ;==>_runcf
 
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _runmwb()
 
-PURPOSE:
+PURPOSE: Runs Malwarebytes
 
-AUTHOR:
+AUTHOR: Kevin Morgan
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: A Long Time Ago
 
-NOTES:
+NOTES: Doesn't handle the log, only completes after stuff is removed manually
 #ce-----------------------------------------------------------------------------
 Func _runmwb()
 	_appendlog(1, "Malwarebytes Anti-Malware")
@@ -515,15 +529,15 @@ Func _runmwb()
 EndFunc   ;==>_runmwb
 
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _installmwb()
 
-PURPOSE:
+PURPOSE: Handles the malwarebytes installation
 
-AUTHOR:
+AUTHOR: Kevin Morgan
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: A Long Time Ago
 
-NOTES:
+NOTES: Might miss a dialog once in a blue moon, but is otherwise super reliable
 #ce-----------------------------------------------------------------------------
 Func _installmwb()
 	Run(@ScriptDir & "\Script\Scanners\MWB\MWB.exe")
@@ -563,15 +577,15 @@ Func _installmwb()
 EndFunc   ;==>_installmwb
 
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _runeset()
 
-PURPOSE:
+PURPOSE: Runs ESET Online Scanner. Logs Results as well
 
-AUTHOR:
+AUTHOR: Kevin Morgan
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: A Long Time Ago
 
-NOTES:
+NOTES: Currently misses the Enable Detection of PUPs screen on most machines
 #ce-----------------------------------------------------------------------------
 Func _runeset()
 	_appendlog(1, "ESET Online Scanner")
@@ -608,15 +622,15 @@ Func _runeset()
 EndFunc   ;==>_runeset
 
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _runsb()
 
-PURPOSE:
+PURPOSE: Runs SpyBot Search and Destroy
 
-AUTHOR:
+AUTHOR: Kevin Morgan
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: A Long Time Ago
 
-NOTES:
+NOTES: Hangs in a lot of places, really need to optimize.
 #ce-----------------------------------------------------------------------------
 Func _runsb()
 	GUICtrlSetStyle($progbar, 8)
@@ -681,15 +695,15 @@ Func _runsb()
 EndFunc   ;==>_runsb
 
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _runsas()
 
-PURPOSE:
+PURPOSE: Runs Super Anti Spyware
 
-AUTHOR:
+AUTHOR: Kevin Morgan
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: A Long Time Ago
 
-NOTES:
+NOTES: Really struggles with the update dialog.
 #ce-----------------------------------------------------------------------------
 Func _runsas()
 	GUICtrlSetStyle($progbar, 8)
@@ -732,15 +746,16 @@ Func _runsas()
 EndFunc   ;==>_runsas
 
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _runhc()
 
-PURPOSE:
+PURPOSE: Breakout function to run the 32/64 bit versions of HC
 
-AUTHOR:
+AUTHOR: Kevin Morgan
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: A Long Time Ago
 
-NOTES:
+NOTES: Currently the 64 bit version runs differently than 32. The 32 bit version
+	   is maintained for compatibility while we optimize the 64 bit
 #ce-----------------------------------------------------------------------------
 Func _runhc()
 	If ($osa = "X86") Then
@@ -751,15 +766,15 @@ Func _runhc()
 EndFunc   ;==>_runhc
 
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _runhc32
 
-PURPOSE:
+PURPOSE: Runs Housecall
 
-AUTHOR:
+AUTHOR: Kevin Morgan
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: A Long Time Ago
 
-NOTES:
+NOTES: Old version. Simulates all clicks directly. Really glitchy.
 #ce-----------------------------------------------------------------------------
 Func _runhc32()
 	GUICtrlSetStyle($progbar, 8)
@@ -792,15 +807,16 @@ Func _runhc32()
 EndFunc   ;==>_runhc32
 
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _runhc64()
 
-PURPOSE:
+PURPOSE: Runs Housecall 64 bit version
 
-AUTHOR:
+AUTHOR: Kevin Morgan
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: Somewhat Recently
 
-NOTES:
+NOTES: Grabs IE handles to effect clicks. Sometimes doesn't work well, looking
+	   for an alternative
 #ce-----------------------------------------------------------------------------
 Func _runhc64()
 	GUICtrlSetStyle($progbar, 8)
@@ -842,15 +858,15 @@ Func _runhc64()
 EndFunc   ;==>_runhc64
 
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _runcc()
 
-PURPOSE:
+PURPOSE: Runs CCleaner
 
-AUTHOR:
+AUTHOR: Kevin Morgan
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: A Long Time Ago
 
-NOTES:
+NOTES: Gets bad data for reg entries
 #ce-----------------------------------------------------------------------------
 Func _runcc()
 	GUICtrlSetStyle($progbar, 8)
@@ -938,28 +954,28 @@ EndFunc   ;==>_runcc
 #Region ###OS
 
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _speedtest
 
-PURPOSE:
+PURPOSE: Should open Speedtest in Internet Explorer
 
-AUTHOR:
+AUTHOR: Kevin Morgan
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: A Long Time Ago
 
-NOTES:
+NOTES: Doesn't work. Need to convert to run/comspec notation
 #ce-----------------------------------------------------------------------------
 Func _speedtest()
 	ShellExecute("iexplore.exe", "http://speedtest.niu.edu")
 EndFunc   ;==>_speedtest
 
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _netadapterproperties()
 
-PURPOSE:
+PURPOSE: Opens Network Adapter Settings
 
-AUTHOR:
+AUTHOR: Kevin Morgan
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: A Long Time Ago
 
 NOTES:
 #ce-----------------------------------------------------------------------------
@@ -968,13 +984,13 @@ Func _netadapterproperties()
 EndFunc   ;==>_netadapterproperties
 
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _progfeat()
 
-PURPOSE:
+PURPOSE: Opens Programs and Features
 
-AUTHOR:
+AUTHOR: Kevin Morgan
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: A Long Time Ago
 
 NOTES:
 #ce-----------------------------------------------------------------------------
@@ -983,13 +999,13 @@ Func _progfeat()
 EndFunc   ;==>_progfeat
 
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _devmgmt()
 
-PURPOSE:
+PURPOSE: Opens Device Management in MMC
 
-AUTHOR:
+AUTHOR: Kevin Morgan
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: A Long Time Ago
 
 NOTES:
 #ce-----------------------------------------------------------------------------
@@ -998,13 +1014,13 @@ Func _devmgmt()
 EndFunc   ;==>_devmgmt
 
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _defraggle
 
-PURPOSE:
+PURPOSE: Defragments the system drive
 
-AUTHOR:
+AUTHOR: Kevin Morgan
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: A Long Time Ago
 
 NOTES:
 #ce-----------------------------------------------------------------------------
@@ -1026,13 +1042,13 @@ Func _defraggle()
 EndFunc   ;==>_defraggle
 
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _webreset
 
-PURPOSE:
+PURPOSE: Performs an IPConfig reset
 
-AUTHOR:
+AUTHOR: Kevin Morgan
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: A Long Time Ago
 
 NOTES:
 #ce-----------------------------------------------------------------------------
@@ -1061,13 +1077,13 @@ Func _webreset()
 EndFunc   ;==>_webreset
 
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _winsock()
 
-PURPOSE:
+PURPOSE: Runs a Winsock Reset
 
-AUTHOR:
+AUTHOR: Kevin Morgan
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: A Long Time Ago
 
 NOTES:
 #ce-----------------------------------------------------------------------------
@@ -1100,13 +1116,13 @@ Func _winsock()
 EndFunc   ;==>_winsock
 
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _hidnetremove
 
-PURPOSE:
+PURPOSE: Removes hidden network adapters using the Device Console
 
-AUTHOR:
+AUTHOR: Kevin Morgan
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: A Long Time Ago
 
 NOTES:
 #ce-----------------------------------------------------------------------------
@@ -1156,15 +1172,15 @@ Func _hidnetremove()
 EndFunc   ;==>_hidnetremove
 
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _chkdsk()
 
-PURPOSE:
+PURPOSE: Catalogs a disk check for next startup
 
-AUTHOR:
+AUTHOR: Kevin Morgan
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: A Long Time Ago
 
-NOTES:
+NOTES: Totally cheats at life. Needs to actually find errors before doing /f
 #ce-----------------------------------------------------------------------------
 Func _chkdsk()
 	_appendlog(5, "Check Disk", "This program will run at next reboot. Results unknown.")
@@ -1178,15 +1194,16 @@ Func _chkdsk()
 EndFunc   ;==>_chkdsk
 
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _sfc()
 
-PURPOSE:
+PURPOSE: Runs SFC
 
-AUTHOR:
+AUTHOR: Kevin Morgan
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: A Long Time Ago
 
-NOTES:
+NOTES: Currently doesn't check against date stamps, which it should to verify
+	   results are from current scan. Additionally, I could diff before/after
 #ce-----------------------------------------------------------------------------
 Func _sfc()
 	_appendlog(1, "System File Checker")
@@ -1219,15 +1236,15 @@ Func _sfc()
 EndFunc   ;==>_sfc
 
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _wifiprofileadd
 
-PURPOSE:
+PURPOSE: Adds the WiFi
 
-AUTHOR:
+AUTHOR: Kevin Morgan
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: A Long Time Ago
 
-NOTES:
+NOTES: Not sure if I actually have the xml bundled with ResTool
 #ce-----------------------------------------------------------------------------
 Func _wifiprofileadd()
 	_appendlog(1, "NIUwireless Profile Import")
@@ -1247,13 +1264,13 @@ Func _wifiprofileadd()
 EndFunc   ;==>_wifiprofileadd
 
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _opencontrolpanel
 
-PURPOSE:
+PURPOSE: Opens Control Panel
 
-AUTHOR:
+AUTHOR: Kevin Morgan
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: A Long Time Ago
 
 NOTES:
 #ce-----------------------------------------------------------------------------
@@ -1264,15 +1281,15 @@ Func _opencontrolpanel()
 	GUICtrlSetData($proglabel, "ResTool Ready...")
 EndFunc   ;==>_opencontrolpanel
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _dism
 
-PURPOSE:
+PURPOSE: runs a DISM scan
 
-AUTHOR:
+AUTHOR: Kevin Morgan
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: A Long Time Ago
 
-NOTES:
+NOTES: Sometimes DISM isn't a thing, and I don't currently catch this.
 #ce-----------------------------------------------------------------------------
 Func _dism()
 	_appendlog(1, "Deployment Image Servicing and Management Tool")
@@ -1293,29 +1310,29 @@ Func _dism()
 	GUICtrlSetData($proglabel, "ResTool Ready.")
 EndFunc   ;==>_dism
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _runaio
 
-PURPOSE:
+PURPOSE: Does nothing right now
 
-AUTHOR:
+AUTHOR: Nobody
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: Never
 
-NOTES:
+NOTES: should run All In One Repair
 #ce-----------------------------------------------------------------------------
-
 Func _runaio()
+
 EndFunc   ;==>_runaio
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _getmse()
 
-PURPOSE:
+PURPOSE: Installs MSE
 
-AUTHOR:
+AUTHOR: Kevin Morgan
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: A Long Time Ago
 
-NOTES:
+NOTES: Not Finished.
 #ce-----------------------------------------------------------------------------
 Func _getmse()
 	If (Not ($osv = "WIN_81") And Not ($osv = "WIN_8")) Then
@@ -1326,15 +1343,15 @@ Func _getmse()
 	EndIf
 EndFunc   ;==>_getmse
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _getprint
 
-PURPOSE:
+PURPOSE: Currently does nothing
 
-AUTHOR:
+AUTHOR: Nobody
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: Never
 
-NOTES:
+NOTES: Will install AnywherePrint client
 #ce-----------------------------------------------------------------------------
 
 Func _getprint()
@@ -1343,88 +1360,87 @@ EndFunc   ;==>_getprint
 #EndRegion ###OS
 #Region ###Removal
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _remnor()
 
-PURPOSE:
+PURPOSE: Nothing
 
-AUTHOR:
+AUTHOR: Nobody
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: Never
 
-NOTES:
+NOTES: Should run Norton Removal Tool
 #ce-----------------------------------------------------------------------------
-
 Func _remnor()
+
 EndFunc   ;==>_remnor
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _remavg()
 
-PURPOSE:
+PURPOSE: Nothing
 
-AUTHOR:
+AUTHOR: Nobody
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: Never
 
-NOTES:
+NOTES: Should run AVG Removal Tool
 #ce-----------------------------------------------------------------------------
-
 Func _remavg()
+
 EndFunc   ;==>_remavg
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _remavt()
 
-PURPOSE:
+PURPOSE: Nothing
 
-AUTHOR:
+AUTHOR: Nobody
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: Never
 
-NOTES:
+NOTES: Should remove Avista, but I don't think anyone actually uses that ever
 #ce-----------------------------------------------------------------------------
-
 Func _remavt()
+
 EndFunc   ;==>_remavt
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _remkas()
 
-PURPOSE:
+PURPOSE: Nothing
 
-AUTHOR:
+AUTHOR: Nobody
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: Never
 
-NOTES:
+NOTES: Should run Kaspersky Removal Tool
 #ce-----------------------------------------------------------------------------
-
 Func _remkas()
+
 EndFunc   ;==>_remkas
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _remmca()
 
-PURPOSE:
+PURPOSE: Nothing
 
-AUTHOR:
+AUTHOR: Nobody
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: Never
 
-NOTES:
+NOTES: Should run McAfee Removal Tools
 #ce-----------------------------------------------------------------------------
-
 Func _remmca()
-EndFunc   ;==>_remmca
 
+EndFunc   ;==>_remmca
 #EndRegion ###Removal
 #Region ###Other
 #cs-----------------------------------------------------------------------------
-FUNCTION:
+FUNCTION: _easteregg()
 
-PURPOSE:
+PURPOSE: Totally does not facilitate an easter egg in the program. Not at all
 
-AUTHOR:
+AUTHOR: It's a Secret
 
-DATE OF LAST UPDATE:
+DATE OF LAST UPDATE: A Long Time Ago
 
-NOTES:
+NOTES: Okay, it might actually be an easter egg. Blame Dan.
 #ce-----------------------------------------------------------------------------
 
 Func _easteregg()
