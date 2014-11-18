@@ -1,11 +1,9 @@
-﻿#Region
+﻿#Region ###Includes and Compiler Directives
 #AutoIt3Wrapper_Icon=ResTool NXT.ico
 #AutoIt3Wrapper_Compression=4
 #AutoIt3Wrapper_Compile_both=y
 #AutoIt3Wrapper_Res_Description=Automation tool for Residential Technology Helpdesk of Northern Illinois University
 #AutoIt3Wrapper_Res_Fileversion=0.1.141023.0
-#EndRegion
-#Region ###Includes
 #RequireAdmin
 #include <GUIConstants.au3>
 #include <MsgBoxConstants.au3>
@@ -171,10 +169,32 @@ While 1
 WEnd
 #EndRegion ###Program Init and Loop
 #Region ###Helpers
+#cs-----------------------------------------------------------------------------
+FUNCTION:
+
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 Func _close()
 	Exit
 EndFunc   ;==>_close
 
+#cs-----------------------------------------------------------------------------
+FUNCTION:
+
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 Func _readableosv()
 	Local $r = ""
 	Local $s = ""
@@ -199,10 +219,32 @@ Func _readableosv()
 	Return $r & " " & $s
 EndFunc   ;==>_readableosv
 
+#cs-----------------------------------------------------------------------------
+FUNCTION:
+
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 Func _runau3($sfilepath, $sworkingdir = "", $ishowflag = @SW_SHOW, $ioptflag = 0)
 	Return Run('"' & @AutoItExe & '" /AutoIt3ExecuteScript "' & $sfilepath & '"', $sworkingdir, $ishowflag, $ioptflag)
 EndFunc   ;==>_runau3
 
+#cs-----------------------------------------------------------------------------
+FUNCTION:
+
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 Func _setticket()
 	Local $newtix = InputBox("Enter Ticket Number", "Please enter the computer's current ticket number:")
 	If (Not $newtix = "") Then
@@ -215,10 +257,32 @@ Func _setticket()
 	EndIf
 EndFunc   ;==>_setticket
 
+#cs-----------------------------------------------------------------------------
+FUNCTION:
+
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 Func _updatelastopen()
 	RegWrite("HKLM\SOFTWARE\ResTech", "LastOpen", "REG_SZ", _NowCalc())
 EndFunc   ;==>_updatelastopen
 
+#cs-----------------------------------------------------------------------------
+FUNCTION:
+
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 Func _appendlog($code, $prog, $msg = "")
 	Local $log = StringLeft(@ScriptDir, 3) & "Logs\" & $ticketno & ".txt"
 	If (Not FileExists($log)) Then
@@ -245,24 +309,79 @@ Func _appendlog($code, $prog, $msg = "")
 	FileClose($logfile)
 EndFunc   ;==>_appendlog
 
+#cs-----------------------------------------------------------------------------
+FUNCTION:
+
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 Func _writeregstats($shortcode, $value)
 	RegWrite("HKLM\SOFTWARE\ResTech\AutoStats", $shortcode, "REG_SZ", $value)
 EndFunc   ;==>_writeregstats
 
+#cs-----------------------------------------------------------------------------
+FUNCTION:
+
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 Func _readregstats($shortcode)
 	Return Number(RegRead("HKLM\SOFTWARE\ResTech\AutoStats", $shortcode))
 EndFunc   ;==>_readregstats
 
+#cs-----------------------------------------------------------------------------
+FUNCTION:
+
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 Func _winwaitnotify($title, $text, $controltitle, $timeout = 0)
 	If (WinWait($title, $text, $timeout) = 0) Then
 		MsgBox($mb_yesno, "Couldn't find " & $title, "ResTool could not find the window titled " & $title & "." & @CRLF & "Please continue to this window and click " & $controltitle & ".")
 	EndIf
 EndFunc   ;==>_winwaitnotify
 
+#cs-----------------------------------------------------------------------------
+FUNCTION:
+
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 Func _queuestartup()
 	FileCreateShortcut(@ScriptFullPath, @StartupCommonDir & "\RT.lnk")
 EndFunc   ;==>_queuestartup
 
+#cs-----------------------------------------------------------------------------
+FUNCTION:
+
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 Func _waitclick($title, $text, $control, $timeout = 0)
 	If (WinWait($title, $text, $timeout) = 0) Then
 		If (MsgBox($mb_yesno, "Couldn't find " & $title, "ResTool could not find the window titled " & $title & "." & @CRLF & "Continue to this window and click " & $control & @CRLF & ". Continue execution?") = $idyes) Then
@@ -278,6 +397,17 @@ EndFunc   ;==>_waitclick
 #EndRegion ###Helpers
 #Region ###Scanners
 
+#cs-----------------------------------------------------------------------------
+FUNCTION:
+
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 Func _runcf()
 	Local $updated = 0
 	_appendlog(1, "ComboFix")
@@ -320,6 +450,17 @@ Func _runcf()
 	GUICtrlSetData($proglabel, "ResTool Ready...")
 EndFunc   ;==>_runcf
 
+#cs-----------------------------------------------------------------------------
+FUNCTION:
+
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 Func _runmwb()
 	_appendlog(1, "Malwarebytes Anti-Malware")
 	GUICtrlSetData($proglabel, "Malwarebytes Running")
@@ -373,6 +514,17 @@ Func _runmwb()
 	GUICtrlSetData($proglabel, "ResTool Ready...")
 EndFunc   ;==>_runmwb
 
+#cs-----------------------------------------------------------------------------
+FUNCTION:
+
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 Func _installmwb()
 	Run(@ScriptDir & "\Script\Scanners\MWB\MWB.exe")
 	_winwaitnotify("Select Setup Language", "", "Next")
@@ -410,6 +562,17 @@ Func _installmwb()
 	Send("{ENTER}")
 EndFunc   ;==>_installmwb
 
+#cs-----------------------------------------------------------------------------
+FUNCTION:
+
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 Func _runeset()
 	_appendlog(1, "ESET Online Scanner")
 	GUICtrlSetData($proglabel, "ESET Running")
@@ -444,6 +607,17 @@ Func _runeset()
 	GUICtrlSetData($proglabel, "ResTool Ready...")
 EndFunc   ;==>_runeset
 
+#cs-----------------------------------------------------------------------------
+FUNCTION:
+
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 Func _runsb()
 	GUICtrlSetStyle($progbar, 8)
 	GUICtrlSendMsg($progbar, $pbm_setmarquee, True, 20)
@@ -506,6 +680,17 @@ Func _runsb()
 	GUICtrlSetData($progbar, 0)
 EndFunc   ;==>_runsb
 
+#cs-----------------------------------------------------------------------------
+FUNCTION:
+
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 Func _runsas()
 	GUICtrlSetStyle($progbar, 8)
 	GUICtrlSendMsg($progbar, $pbm_setmarquee, True, 20)
@@ -546,6 +731,17 @@ Func _runsas()
 	GUICtrlSetData($proglabel, "ResTool Ready...")
 EndFunc   ;==>_runsas
 
+#cs-----------------------------------------------------------------------------
+FUNCTION:
+
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 Func _runhc()
 	If ($osa = "X86") Then
 		_runhc32()
@@ -554,6 +750,17 @@ Func _runhc()
 	EndIf
 EndFunc   ;==>_runhc
 
+#cs-----------------------------------------------------------------------------
+FUNCTION:
+
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 Func _runhc32()
 	GUICtrlSetStyle($progbar, 8)
 	GUICtrlSendMsg($progbar, $pbm_setmarquee, True, 20)
@@ -584,6 +791,17 @@ Func _runhc32()
 	EndIf
 EndFunc   ;==>_runhc32
 
+#cs-----------------------------------------------------------------------------
+FUNCTION:
+
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 Func _runhc64()
 	GUICtrlSetStyle($progbar, 8)
 	GUICtrlSendMsg($progbar, $pbm_setmarquee, True, 20)
@@ -623,6 +841,17 @@ Func _runhc64()
 	EndIf
 EndFunc   ;==>_runhc64
 
+#cs-----------------------------------------------------------------------------
+FUNCTION:
+
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 Func _runcc()
 	GUICtrlSetStyle($progbar, 8)
 	GUICtrlSendMsg($progbar, $pbm_setmarquee, True, 20)
@@ -708,22 +937,77 @@ EndFunc   ;==>_runcc
 #EndRegion ###Scanners
 #Region ###OS
 
+#cs-----------------------------------------------------------------------------
+FUNCTION:
+
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 Func _speedtest()
 	ShellExecute("iexplore.exe", "http://speedtest.niu.edu")
 EndFunc   ;==>_speedtest
 
+#cs-----------------------------------------------------------------------------
+FUNCTION:
+
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 Func _netadapterproperties()
 	ShellExecute("Ncpa.cpl")
 EndFunc   ;==>_netadapterproperties
 
+#cs-----------------------------------------------------------------------------
+FUNCTION:
+
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 Func _progfeat()
 	ShellExecute("appwiz.cpl")
 EndFunc   ;==>_progfeat
 
+#cs-----------------------------------------------------------------------------
+FUNCTION:
+
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 Func _devmgmt()
 	ShellExecute("devmgmt.msc")
 EndFunc   ;==>_devmgmt
 
+#cs-----------------------------------------------------------------------------
+FUNCTION:
+
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 Func _defraggle()
 	_appendlog(1, "Disk Defragmenter")
 	GUICtrlSetStyle($progbar, 8)
@@ -741,6 +1025,17 @@ Func _defraggle()
 	GUICtrlSetData($proglabel, "ResTool Ready...")
 EndFunc   ;==>_defraggle
 
+#cs-----------------------------------------------------------------------------
+FUNCTION:
+
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 Func _webreset()
 	_appendlog(1, "IPConfig Reset")
 	GUICtrlSetData($proglabel, "Initializing IP Config Reset")
@@ -765,6 +1060,17 @@ Func _webreset()
 	_appendlog(4, "IPConfig Reset")
 EndFunc   ;==>_webreset
 
+#cs-----------------------------------------------------------------------------
+FUNCTION:
+
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 Func _winsock()
 	_appendlog(1, "Network Services Reset")
 	ShellExecuteWait("netsh", "winsock reset", "", "", @SW_HIDE)
@@ -793,6 +1099,17 @@ Func _winsock()
 	_appendlog(4, "Network Services Reset")
 EndFunc   ;==>_winsock
 
+#cs-----------------------------------------------------------------------------
+FUNCTION:
+
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 Func _hidnetremove()
 	_appendlog(1, "Hidden Network Adapter Removal")
 	Local $devcon = @ScriptDir & "\Script\OOB\64"
@@ -838,6 +1155,17 @@ Func _hidnetremove()
 	_appendlog(4, "Hidden Network Adapter Removal")
 EndFunc   ;==>_hidnetremove
 
+#cs-----------------------------------------------------------------------------
+FUNCTION:
+
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 Func _chkdsk()
 	_appendlog(5, "Check Disk", "This program will run at next reboot. Results unknown.")
 	ShellExecuteWait("fsutil", "dirty set c:")
@@ -849,6 +1177,17 @@ Func _chkdsk()
 	GUICtrlSetData($proglabel, "Chkdsk scan successfully queued.")
 EndFunc   ;==>_chkdsk
 
+#cs-----------------------------------------------------------------------------
+FUNCTION:
+
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 Func _sfc()
 	_appendlog(1, "System File Checker")
 	GUICtrlSetStyle($progbar, 8)
@@ -879,6 +1218,17 @@ Func _sfc()
 	GUICtrlSetData($proglabel, "ResTool Ready...")
 EndFunc   ;==>_sfc
 
+#cs-----------------------------------------------------------------------------
+FUNCTION:
+
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 Func _wifiprofileadd()
 	_appendlog(1, "NIUwireless Profile Import")
 	ShellExecuteWait("netsh", "wlan delete profile name=NIUwireless", "", "", @SW_HIDE)
@@ -896,13 +1246,34 @@ Func _wifiprofileadd()
 	_appendlog(4, "NIUwireless Profile Import")
 EndFunc   ;==>_wifiprofileadd
 
+#cs-----------------------------------------------------------------------------
+FUNCTION:
+
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 Func _opencontrolpanel()
 	GUICtrlSetData($proglabel, "Opening Control Panel")
 	ShellExecuteWait("control", "", "")
 	GUICtrlSetData($progbar, 0)
 	GUICtrlSetData($proglabel, "ResTool Ready...")
 EndFunc   ;==>_opencontrolpanel
+#cs-----------------------------------------------------------------------------
+FUNCTION:
 
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 Func _dism()
 	_appendlog(1, "Deployment Image Servicing and Management Tool")
 	GUICtrlSetStyle($progbar, 8)
@@ -921,10 +1292,31 @@ Func _dism()
 	EndIf
 	GUICtrlSetData($proglabel, "ResTool Ready.")
 EndFunc   ;==>_dism
+#cs-----------------------------------------------------------------------------
+FUNCTION:
+
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 
 Func _runaio()
 EndFunc   ;==>_runaio
+#cs-----------------------------------------------------------------------------
+FUNCTION:
 
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 Func _getmse()
 	If (Not ($osv = "WIN_81") And Not ($osv = "WIN_8")) Then
 		If ($osa == "X86") Then
@@ -933,30 +1325,107 @@ Func _getmse()
 	Else
 	EndIf
 EndFunc   ;==>_getmse
+#cs-----------------------------------------------------------------------------
+FUNCTION:
+
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 
 Func _getprint()
 EndFunc   ;==>_getprint
 
 #EndRegion ###OS
 #Region ###Removal
+#cs-----------------------------------------------------------------------------
+FUNCTION:
+
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 
 Func _remnor()
 EndFunc   ;==>_remnor
+#cs-----------------------------------------------------------------------------
+FUNCTION:
+
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 
 Func _remavg()
 EndFunc   ;==>_remavg
+#cs-----------------------------------------------------------------------------
+FUNCTION:
+
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 
 Func _remavt()
 EndFunc   ;==>_remavt
+#cs-----------------------------------------------------------------------------
+FUNCTION:
+
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 
 Func _remkas()
 EndFunc   ;==>_remkas
+#cs-----------------------------------------------------------------------------
+FUNCTION:
+
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 
 Func _remmca()
 EndFunc   ;==>_remmca
 
 #EndRegion ###Removal
 #Region ###Other
+#cs-----------------------------------------------------------------------------
+FUNCTION:
+
+PURPOSE:
+
+AUTHOR:
+
+DATE OF LAST UPDATE:
+
+NOTES:
+#ce-----------------------------------------------------------------------------
 
 Func _easteregg()
 	Local $ovum[11] = ["Formatting the system drive", "Emailing nasty comments to Kuba", "Pestering ITS", "Insulting the user", "Wiping client's social media", "Reconfiguring proxy", "Installing µTorrent", "Breaking the law", "Reticulating Splines", "Kicking Puppies", "Doing Something Evil"]
