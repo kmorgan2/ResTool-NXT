@@ -5,7 +5,7 @@
 #AutoIt3Wrapper_Compression=4
 #AutoIt3Wrapper_Compile_Both=y
 #AutoIt3Wrapper_Res_Description=Automation tool for Residential Technology Helpdesk of Northern Illinois University
-#AutoIt3Wrapper_Res_Fileversion=0.1.141120.0
+#AutoIt3Wrapper_Res_Fileversion=0.1.141120.1
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #Region ###Includes and Compiler Directives
 #include <GUIConstants.au3>
@@ -131,8 +131,8 @@ GUICtrlSetOnEvent($programs, "_ProgFeat")
 GUICtrlSetOnEvent($temp, "_tempfr")
 GUICtrlSetOnEvent($mwbar, "") ;_runmwbar
 GUICtrlSetStyle($mwbar, $ws_disabled)
-GUICtrlSetOnEvent($tdss, "") ;_runtdss
-GUICtrlSetStyle($tdss, $ws_disabled)
+GUICtrlSetOnEvent($tdss, "_runtdss")
+;GUICtrlSetStyle($tdss, $ws_disabled)
 GUICtrlSetOnEvent($rmscan, "") ;_remscans
 GUICtrlSetStyle($rmscan, $ws_disabled)
 GUICtrlSetOnEvent($mse, "_GetMSE")
@@ -835,13 +835,16 @@ Func _runhc64()
 		$handle = _IEAttach(WinWaitActive("[CLASS:#32770]"), "embedded")
 		$accept = _IEGetObjById($handle, "r_eula_0")
 		$next = _IEGetObjById($handle, "btn_next")
+		If Not(@error = 7) Then
 		_IEAction($accept, "click")
 		_IEAction($next, "click")
+		EndIf
 		Sleep(1000)
 		$settings = _IEGetObjById($handle, "Settings")
 		$scan = _IEGetObjById($handle, "ScanNow")
 		_IEAction($settings, "click")
-		$settingswin = WinGetHandle("[CLASS:#32770]")
+		Sleep(1000)
+		$settingswin = WinGetHandle("[ACTIVE]");trouble
 		$settingshandle = _IEAttach($settingswin, "embedded")
 		$full = _IEGetObjById($settingshandle, "type1")
 		$ok = _IEGetObjById($settingshandle, "btn_ok")
@@ -950,6 +953,46 @@ Func _runcc()
 	GUICtrlSetData($proglabel, "ResTool Ready...")
 EndFunc   ;==>_runcc
 
+#cs -----------------------------------------------------------------------------
+FUNCTION: _runtdss()
+
+PURPOSE: Runs TDSSKiller
+
+AUTHOR: Kevin Morgan
+
+DATE OF LAST UPDATE: 11/20/14
+
+NOTES:
+#ce -----------------------------------------------------------------------------
+Func _runtdss()
+	GUICtrlSetStyle($progbar, 8)
+	GUICtrlSendMsg($progbar, $pbm_setmarquee, True, 20)
+	GUICtrlSetData($proglabel, "TDSSKiller Running")
+	_appendlog(1, "TDSSKiller")
+	Local $aTDSSLog
+	Dim $suscount = 0, $infcount = 0
+	ShellExecute(@ScriptDir & "\Script\Scanners\TDSS.exe", "-silent -l C:\TDSSAI.txt -accepteula -accepteulaksn")
+	If FileExists("C:\TDSSAI.txt") Then
+            If Not _FileReadToArray("C:\TDSSAI.txt", $aTDSSLog) Then
+                MsgBox(16, "Error", "Error parsing results")
+                _appendlog(2, "TDSSKiller", "Error parsing results")
+            Else
+                For $i = 1 To UBound($aTDSSLog) - 1
+                    If StringInStr($aTDSSLog[$i], "Suspicious") Then
+                        $suscount += 1
+                    ElseIf StringInStr($aTDSSLog[$i], "infected") Then
+                        $infcount += 1
+                    EndIf
+                Next
+				MsgBox(0, "Results", $suscount & " suspicious files, and " & $infcount & " infected files.")
+				_appendlog(3, "TDSSKiller", $suscount & " suspicious / " & $infcount & " infected")
+            EndIf
+        EndIf
+	GUICtrlSetStyle($progbar, 1)
+	GUICtrlSetData($progbar, 0)
+	GUICtrlSetData($proglabel, "ResTool Ready...")
+	_appendlog(4, "TDSSKiller")
+EndFunc
 #EndRegion ###Scanners
 #Region ###OS
 #cs -----------------------------------------------------------------------------
