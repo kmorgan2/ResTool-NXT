@@ -1,10 +1,13 @@
-﻿#Region ###Includes and Compiler Directives
+﻿#RequireAdmin
+#Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=ResTool NXT.ico
+#AutoIt3Wrapper_Outfile_x64=J:\ResTool NXT_x64.exe
 #AutoIt3Wrapper_Compression=4
-#AutoIt3Wrapper_Compile_both=y
+#AutoIt3Wrapper_Compile_Both=y
 #AutoIt3Wrapper_Res_Description=Automation tool for Residential Technology Helpdesk of Northern Illinois University
-#AutoIt3Wrapper_Res_Fileversion=0.1.141118.3
-#RequireAdmin
+#AutoIt3Wrapper_Res_Fileversion=0.1.141120.0
+#EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
+#Region ###Includes and Compiler Directives
 #include <GUIConstants.au3>
 #include <MsgBoxConstants.au3>
 #include <Date.au3>
@@ -49,8 +52,6 @@ $ticket = GUICtrlCreateButton("Ticket", 228, 167, 75, 25)
 $rootkit = GUICtrlCreateGroup("Rootkit", 115, 207, 96, 115)
 $mwbar = GUICtrlCreateButton("MWBAR", 125, 232, 75, 25)
 $tdss = GUICtrlCreateButton("TDSS", 125, 282, 75, 25)
-$pic1 = GUICtrlCreatePic(@ScriptDir & "\clippy-300x300.jpg", 220, 212, 97, 110)
-GUICtrlSetTip(-1, "Hi! I'm Clippy, and I'm your ResTool Assistant. Just kidding. I'm a total easter egg.")
 $tabsheet2 = GUICtrlCreateTabItem("OS Troubleshooting")
 $net = GUICtrlCreateGroup("Network", 10, 42, 95, 310)
 $ipconfig = GUICtrlCreateButton("IPConfig", 20, 67, 75, 25)
@@ -72,8 +73,7 @@ $rmmse = GUICtrlCreateButton("Remove MSE", 230, 117, 75, 25)
 $msconfig = GUICtrlCreateButton("MSConfig", 230, 267, 75, 25)
 $cpl = GUICtrlCreateButton("Control Panel", 230, 167, 75, 25)
 $regedit = GUICtrlCreateButton("Registry", 230, 217, 75, 25)
-$nada = GUICtrlCreateButton("Nothing", 230, 317, 75, 25)
-GUICtrlSetTip(-1, "This button does nothing!")
+$print = GUICtrlCreateButton("Pharos", 230, 317, 75, 25)
 $tabsheet3 = GUICtrlCreateTabItem("Removal Tools")
 $ni = GUICtrlCreateLabel("NOT IMPLEMENTED", 0, 173, 320, 28, $ss_center)
 $tabsheet4 = GUICtrlCreateTabItem("Auto")
@@ -82,9 +82,6 @@ GUICtrlSetFont(-1, 16, 400, 0, "MS Sans Serif")
 GUICtrlSetColor(-1, 16711680)
 $auto = GUICtrlCreateButton(" FIX EVERYTHING!", 52, 213, 200, 100)
 GUICtrlSetTip(-1, "You've been warned!")
-If (Not (Random(0, 499, 1) == 217)) Then
-	GUICtrlSetState($pic1, 32)
-EndIf
 $statusbar1 = _GUICtrlStatusBar_Create($form)
 Dim $statusbar1_partswidth[3] = [150, 250, -1]
 _GUICtrlStatusBar_SetParts($statusbar1, $statusbar1_partswidth)
@@ -131,15 +128,15 @@ GUICtrlSetOnEvent($sas, "_RunSAS")
 GUICtrlSetOnEvent($housecall, "_RunHC")
 GUICtrlSetOnEvent($ccleaner, "_RunCC")
 GUICtrlSetOnEvent($programs, "_ProgFeat")
-GUICtrlSetOnEvent($temp, "")
-GUICtrlSetStyle($temp, $ws_disabled)
-GUICtrlSetOnEvent($rmscan, "")
+GUICtrlSetOnEvent($temp, "_tempfr")
+GUICtrlSetOnEvent($mwbar, "") ;_runmwbar
+GUICtrlSetStyle($mwbar, $ws_disabled)
+GUICtrlSetOnEvent($tdss, "") ;_runtdss
+GUICtrlSetStyle($tdss, $ws_disabled)
+GUICtrlSetOnEvent($rmscan, "") ;_remscans
 GUICtrlSetStyle($rmscan, $ws_disabled)
 GUICtrlSetOnEvent($mse, "_GetMSE")
-GUICtrlSetOnEvent($mwbar, "")
-GUICtrlSetStyle($mwbar, $ws_disabled)
-GUICtrlSetOnEvent($tdss, "")
-GUICtrlSetStyle($tdss, $ws_disabled)
+GUICtrlSetOnEvent($ticket, "_openticket")
 GUICtrlSetOnEvent($ipconfig, "_WebReset")
 GUICtrlSetOnEvent($winsock, "_Winsock")
 GUICtrlSetOnEvent($hidadapt, "_HidNetRemove")
@@ -149,20 +146,20 @@ GUICtrlSetOnEvent($ncprop, "_NetAdapterProperties")
 GUICtrlSetOnEvent($sfc, "_SFC")
 GUICtrlSetOnEvent($dism, "_DISM")
 GUICtrlSetOnEvent($chkdsk, "_Chkdsk")
-GUICtrlSetOnEvent($aio, "")
+GUICtrlSetOnEvent($aio, "_runaio")
 GUICtrlSetStyle($aio, $ws_disabled)
 GUICtrlSetOnEvent($defrag, "_Defraggle")
 GUICtrlSetOnEvent($devmgr, "_Devmgmt")
-GUICtrlSetOnEvent($rmnac, "")
+GUICtrlSetOnEvent($rmnac, "") ;_rmnac
 GUICtrlSetStyle($rmnac, $ws_disabled)
-GUICtrlSetOnEvent($msconfig, "_togglemsconfig")
-GUICtrlSetOnEvent($regedit, "")
-GUICtrlSetStyle($regedit, $ws_disabled)
-GUICtrlSetOnEvent($nada, "")
-GUICtrlSetOnEvent($auto, "_EasterEgg")
-GUICtrlSetOnEvent($rmmse, "")
+GUICtrlSetOnEvent($rmmse, "") ;_rmmse
 GUICtrlSetStyle($rmmse, $ws_disabled)
 GUICtrlSetOnEvent($cpl, "_OpenControlPanel")
+GUICtrlSetOnEvent($regedit, "_regedit")
+GUICtrlSetStyle($regedit, $ws_disabled)
+GUICtrlSetOnEvent($msconfig, "_togglemsconfig")
+GUICtrlSetOnEvent($print, "_anyprint")
+GUICtrlSetOnEvent($auto, "_EasterEgg")
 GUICtrlSetData($proglabel, "ResTool Ready...")
 GUICtrlSetStyle($progbar, 1)
 GUICtrlSetData($progbar, 0)
@@ -413,7 +410,6 @@ EndFunc   ;==>_waitclick
 
 #EndRegion ###Helpers
 #Region ###Scanners
-
 #cs -----------------------------------------------------------------------------
 FUNCTION: _runcf()
 
@@ -612,6 +608,7 @@ Func _runeset()
 		EndIf
 	EndIf
 	_winwaitnotify("ESET Online Scanner", "unwanted", "Enable detection and Start")
+	Sleep(1000)
 	ControlClick("ESET Online Scanner", "unwanted", 346)
 	ControlClick("ESET Online Scanner", "unwanted", 321)
 	WinWaitActive("ESET Online Scanner", "Finished")
@@ -956,6 +953,94 @@ EndFunc   ;==>_runcc
 #EndRegion ###Scanners
 #Region ###OS
 #cs -----------------------------------------------------------------------------
+FUNCTION: _anyprint()
+
+PURPOSE: Installs Anywhere Printer support
+
+AUTHOR: Kevin Morgan
+
+DATE OF LAST UPDATE: 11/20/14
+
+NOTES:
+#ce -----------------------------------------------------------------------------
+Func _anyprint()
+	GUICtrlSetStyle($progbar, 8)
+	GUICtrlSendMsg($progbar, $pbm_setmarquee, True, 20)
+	GUICtrlSetData($proglabel, "Installing Anywhere Printer")
+	_appendlog(1, "Pharos Install")
+	Run(@ScriptDir & "\Script\Installers\Pharos.exe")
+	WinWait("Package ""Windows AnywherePrint Client"" installer.", "")
+	WinActivate("[LAST]")
+	ControlClick("Package ""Windows AnywherePrint Client"" installer.", "", "Button1")
+	WinWait("Package ""Windows AnywherePrint Client"" installer.", "Install")
+	ControlClick("Package ""Windows AnywherePrint Client"" installer.", "", "Button1")
+	WinWait("Package ""Windows AnywherePrint Client"" installer.", "Finish")
+	ControlClick("Package ""Windows AnywherePrint Client"" installer.", "", "Button2")
+	_appendlog(4, "Pharos Install")
+	GUICtrlSetStyle($progbar, 1)
+	GUICtrlSetData($progbar, 0)
+	GUICtrlSetData($proglabel, "ResTool Ready...")
+EndFunc
+#cs -----------------------------------------------------------------------------
+FUNCTION: _tempfr()
+
+PURPOSE: Uses the Disk Cleanup tool to remove temp files
+
+AUTHOR: Kevin Morgan
+
+DATE OF LAST UPDATE: 11/20/14
+
+NOTES: Removes default selected files, since in most cases unchecked entries
+	   only add up to a couple mb of space or are handled by CCleaner
+#ce -----------------------------------------------------------------------------
+Func _tempfr()
+	GUICtrlSetStyle($progbar, 8)
+	GUICtrlSendMsg($progbar, $pbm_setmarquee, True, 20)
+	GUICtrlSetData($proglabel, "Running Disk Cleanup")
+	_appendlog(1, "Disk Cleanup")
+	Run(@SystemDir & "\cleanmgr.exe")
+	WinWait("Disk Cleanup", "")
+	WinWait("Disk Cleanup for  (C:)", "")
+	WinActivate("Disk Cleanup for  (C:)", "")
+	ControlClick("Disk Cleanup for  (C:)", "", "Button4")
+	WinWait("Disk Cleanup", "Delete Files")
+	ControlClick("Disk Cleanup", "Delete Files", "Button1")
+	ProcessWaitClose("cleanmgr.exe")
+	_appendlog(4, "Disk Cleanup")
+	GUICtrlSetStyle($progbar, 1)
+	GUICtrlSetData($progbar, 0)
+	GUICtrlSetData($proglabel, "ResTool Ready...")
+EndFunc
+
+#cs -----------------------------------------------------------------------------
+FUNCTION: _openticket()
+
+PURPOSE: Opens the ticket
+
+AUTHOR: Kevin Morgan
+
+DATE OF LAST UPDATE: 11/20/14
+
+NOTES: Opens in default browser
+#ce -----------------------------------------------------------------------------
+Func _openticket()
+	ShellExecute("http://intranet.restech.niu.edu/tickets/" & $ticketno)
+EndFunc
+#cs -----------------------------------------------------------------------------
+FUNCTION: _regedit()
+
+PURPOSE: Opens the Registry Editor
+
+AUTHOR: Kevin Morgan
+
+DATE OF LAST UPDATE: 11/20/14
+
+NOTES: Opens the registry associated with program arch. 64 gets 64 reg, 32 to 32
+#ce -----------------------------------------------------------------------------
+Func _regedit()
+	ShellExecute("regedit")
+EndFunc
+#cs -----------------------------------------------------------------------------
 FUNCTION: _togglemsconfig()
 
 PURPOSE: Toggles safe boot
@@ -995,19 +1080,19 @@ EndFunc
 #cs -----------------------------------------------------------------------------
 FUNCTION: _speedtest
 
-PURPOSE: Should open Speedtest in Internet Explorer
+PURPOSE: Opens Speedtest in Internet Explorer
 
 AUTHOR: Kevin Morgan
 
 DATE OF LAST UPDATE: A Long Time Ago
 
-NOTES: Doesn't work. Need to convert to run/comspec notation
+NOTES: Opens in default browser
 #ce -----------------------------------------------------------------------------
 Func _speedtest()
-	ShellExecute("iexplore.exe", "http://speedtest.niu.edu")
+	ShellExecute("http://speedtest.niu.edu")
 EndFunc   ;==>_speedtest
 
-#cs -----------------------------------------------------------------------------
+#cs ---------------------------------s--------------------------------------------
 FUNCTION: _netadapterproperties()
 
 PURPOSE: Opens Network Adapter Settings
@@ -1369,17 +1454,42 @@ PURPOSE: Installs MSE
 
 AUTHOR: Kevin Morgan
 
-DATE OF LAST UPDATE: A Long Time Ago
+DATE OF LAST UPDATE: 11/20/14
 
-NOTES: Not Finished.
+NOTES: Does not activate yet on Win 8.1
 #ce -----------------------------------------------------------------------------
 Func _getmse()
+	_appendlog(1, "MSE Install")
+	GUICtrlSetStyle($progbar, 8)
+	GUICtrlSendMsg($progbar, $pbm_setmarquee, True, 20)
+	GUICtrlSetData($proglabel, "Installing MSE")
 	If (Not ($osv = "WIN_81") And Not ($osv = "WIN_8")) Then
 		If ($osa == "X86") Then
+			Run(@ScriptDir & "\Script\Installers\MSE32.exe")
 		Else
+			Run(@ScriptDir & "\Script\Installers\MSE64.exe")
 		EndIf
+			WinWait("Microsoft Security Essentials", "")
+			ControlClick("Microsoft Security Essentials", "", "Button1")
+			WinWait("Microsoft Security Essentials", "accept")
+			ControlClick("Microsoft Security Essentials", "", "Button1")
+			WinWait("Microsoft Security Essentials", "join the program")
+			ControlClick("Microsoft Security Essentials", "", "Button2")
+			Sleep(100)
+			ControlClick("Microsoft Security Essentials", "", "Button4")
+			WinWait("Microsoft Security Essentials", "optimize")
+			ControlClick("Microsoft Security Essentials", "", "Button2")
+			WinWait("Microsoft Security Essentials", "may conflict with")
+			ControlClick("Microsoft Security Essentials", "", "Button1")
+			WinWait("Microsoft Security Essentials", "Finish")
+			ControlClick("Microsoft Security Essentials", "", "Button1")
 	Else
+		;Need to enable because Win 8.
 	EndIf
+	GUICtrlSetStyle($progbar, 1)
+	GUICtrlSetData($progbar, 0)
+	_appendlog(4, "MSE Install")
+	GUICtrlSetData($proglabel, "ResTool Ready...")
 EndFunc   ;==>_getmse
 #cs -----------------------------------------------------------------------------
 FUNCTION: _getprint
