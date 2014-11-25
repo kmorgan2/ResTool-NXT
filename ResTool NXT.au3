@@ -5,7 +5,7 @@
 #AutoIt3Wrapper_Compression=4
 #AutoIt3Wrapper_Compile_Both=y
 #AutoIt3Wrapper_Res_Description=Automation tool for Residential Technology Helpdesk of Northern Illinois University
-#AutoIt3Wrapper_Res_Fileversion=0.1.141125.0
+#AutoIt3Wrapper_Res_Fileversion=0.1.141125.1
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #Region ###Includes and Compiler Directives
 #include <GUIConstants.au3>
@@ -163,7 +163,7 @@ If Not(($OSV = "WIN_8_1") Or ($OSV = "WIN_8")) Then
 EndIf
 GUICtrlSetOnEvent($chkdsk, "_Chkdsk")
 GUICtrlSetOnEvent($aio, "_runaio")
-GUICtrlSetStyle($aio, $ws_disabled)
+;GUICtrlSetStyle($aio, $ws_disabled)
 GUICtrlSetOnEvent($defrag, "_Defraggle")
 GUICtrlSetOnEvent($devmgr, "_Devmgmt")
 GUICtrlSetOnEvent($rmnac, "") ;_rmnac
@@ -1304,9 +1304,9 @@ PURPOSE: Catalogs a disk check for next startup
 
 AUTHOR: Kevin Morgan
 
-DATE OF LAST UPDATE: A Long Time Ago
+DATE OF LAST UPDATE: 11/25/14
 
-NOTES: Totally cheats at life. Needs to actually find errors before doing /f
+NOTES:
 #ce -----------------------------------------------------------------------------
 Func _chkdsk()
 	_appendlog(1, "Disk Check")
@@ -1434,9 +1434,9 @@ PURPOSE: runs a DISM scan
 
 AUTHOR: Kevin Morgan
 
-DATE OF LAST UPDATE: A Long Time Ago
+DATE OF LAST UPDATE: 11/25/14
 
-NOTES: Sometimes DISM isn't a thing, and I don't currently catch this.
+NOTES:
 #ce -----------------------------------------------------------------------------
 Func _dism()
 	_appendlog(1, "Deployment Image Servicing and Management Tool")
@@ -1458,16 +1458,41 @@ EndFunc   ;==>_dism
 #cs -----------------------------------------------------------------------------
 FUNCTION: _runaio
 
-PURPOSE: Does nothing right now
+PURPOSE: Runs Tweaking.com - Windows Repair All in One
 
 AUTHOR: Nobody
 
-DATE OF LAST UPDATE: Never
+DATE OF LAST UPDATE: 11/25/14
 
-NOTES: should run All In One Repair
+NOTES: Uses silent mode. Not logging compliant.
 #ce -----------------------------------------------------------------------------
 Func _runaio()
-
+	_appendlog(1, "All-in-One")
+	GUICtrlSetStyle($progbar, 8)
+	GUICtrlSendMsg($progbar, $pbm_setmarquee, True, 20)
+	GUICtrlSetData($proglabel, "Running AIO")
+	;if not installed
+	If Not(FileExists($32progfiledir & "\Tweaking.com\Windows Repair (All in One)\Repair_Windows.exe")) Then
+		Run(@ScriptDir & "\Script\AIO.exe")
+		WinWait("Tweaking.com - Windows Repair (All in One) Setup", "")
+		ControlClick("Tweaking.com - Windows Repair (All in One) Setup", "", "Button3")
+		WinWait("Tweaking.com - Windows Repair (All in One) Setup", "C&hange...")
+		ControlClick("Tweaking.com - Windows Repair (All in One) Setup", "", "Button1")
+		WinWait("Tweaking.com - Windows Repair (All in One) Setup", "Install shortcuts")
+		ControlClick("Tweaking.com - Windows Repair (All in One) Setup", "", "Button1")
+		Sleep(500)
+		ControlClick("Tweaking.com - Windows Repair (All in One) Setup", "", "Button1")
+		WinWait("Tweaking.com - Windows Repair (All in One) Setup", "Create Desktop")
+		;need to actually do these correctly
+		Send("!n")
+		Sleep(100)
+		Send("!f")
+	EndIf
+	ShellExecuteWait($32progfiledir & "\Tweaking.com\Windows Repair (All in One)\Repair_Windows.exe", "/silent")
+	GUICtrlSetStyle($progbar, 1)
+	GUICtrlSetData($progbar, 0)
+	_appendlog(4, "MSE Install")
+	GUICtrlSetData($proglabel, "ResTool Ready...")
 EndFunc   ;==>_runaio
 #cs -----------------------------------------------------------------------------
 FUNCTION: _getmse()
