@@ -5,7 +5,7 @@
 #AutoIt3Wrapper_Compression=4
 #AutoIt3Wrapper_Compile_Both=y
 #AutoIt3Wrapper_Res_Description=Automation tool for Residential Technology Helpdesk of Northern Illinois University
-#AutoIt3Wrapper_Res_Fileversion=0.1.141120.1
+#AutoIt3Wrapper_Res_Fileversion=0.1.141124.0
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #Region ###Includes and Compiler Directives
 #include <GUIConstants.au3>
@@ -744,108 +744,52 @@ Func _runsas()
 	GUICtrlSetData($progbar, 0)
 	GUICtrlSetData($proglabel, "ResTool Ready...")
 EndFunc   ;==>_runsas
-
 #cs -----------------------------------------------------------------------------
 FUNCTION: _runhc()
-
-PURPOSE: Breakout function to run the 32/64 bit versions of HC
-
-AUTHOR: Kevin Morgan
-
-DATE OF LAST UPDATE: A Long Time Ago
-
-NOTES: Currently the 64 bit version runs differently than 32. The 32 bit version
-	   is maintained for compatibility while we optimize the 64 bit
-#ce -----------------------------------------------------------------------------
-Func _runhc()
-	If ($osa = "X86") Then
-		_runhc32()
-	Else
-		_runhc64()
-	EndIf
-EndFunc   ;==>_runhc
-
-#cs -----------------------------------------------------------------------------
-FUNCTION: _runhc32
 
 PURPOSE: Runs Housecall
 
 AUTHOR: Kevin Morgan
 
-DATE OF LAST UPDATE: A Long Time Ago
+DATE OF LAST UPDATE: 11/24/14
 
-NOTES: Old version. Simulates all clicks directly. Really glitchy.
+NOTES: Now works perfectly fine, but requires a slight bit of cheating
 #ce -----------------------------------------------------------------------------
-Func _runhc32()
+Func _runhc()
 	GUICtrlSetStyle($progbar, 8)
 	GUICtrlSendMsg($progbar, $pbm_setmarquee, True, 20)
 	GUICtrlSetData($proglabel, "HouseCall Running")
-	_appendlog(1, "Trend Micro HouseCall")
-	Run(@ScriptDir & "/Script/Scanners/HC/HC32.exe")
-	_winwaitnotify("HouseCall Download", "", "OK")
-	Sleep(1000)
-	If (WinActive("Trend Micro HouseCall", "Unable to complete the download.")) Then
-		MsgBox(48, "Network Connection", "Plug in the proxy and press OK.")
-		_runhc32()
+	If ($osv = "X86") Then
+		$ver = "32"
 	Else
-		WinWaitClose("HouseCall Download")
-		Sleep(10000)
-		ControlClick("", "", "[CLASS:Internet Explorer_Server; INSTANCE:1]", "left", 1, 33, 313)
-		Sleep(1000)
-		ControlClick("", "", "[CLASS:Internet Explorer_Server; INSTANCE:1]", "left", 1, 564, 365)
-		Sleep(1000)
-		ControlClick("", "", "[CLASS:Internet Explorer_Server; INSTANCE:1]", "left", 1, 570, 133)
-		MsgBox(0, "Housecall is Evil!", "Housecall won't tell me when it finishes. So I'm going to make your life extra hard and make you close it for me. Thanks!")
-		While (ProcessExists("housecall.bin"))
-			Sleep(10000)
-		WEnd
-		GUICtrlSetStyle($progbar, 1)
-		GUICtrlSetData($progbar, 0)
-		GUICtrlSetData($proglabel, "ResTool Ready...")
-		_appendlog(4, "Trend Micro HouseCall")
+		$ver = "64"
 	EndIf
-EndFunc   ;==>_runhc32
-
-#cs -----------------------------------------------------------------------------
-FUNCTION: _runhc64()
-
-PURPOSE: Runs Housecall 64 bit version
-
-AUTHOR: Kevin Morgan
-
-DATE OF LAST UPDATE: Somewhat Recently
-
-NOTES: Grabs IE handles to effect clicks. Sometimes doesn't work well, looking
-	   for an alternative
-#ce -----------------------------------------------------------------------------
-Func _runhc64()
-	GUICtrlSetStyle($progbar, 8)
-	GUICtrlSendMsg($progbar, $pbm_setmarquee, True, 20)
-	GUICtrlSetData($proglabel, "HouseCall Running")
 	_appendlog(1, "Trend Micro HouseCall")
-	Run(@ScriptDir & "\Script\Scanners\HC\HC64.exe")
+	Run(@ScriptDir & "\Script\Scanners\HC\HC" & $ver & ".exe")
 	_winwaitnotify("HouseCall Download", "", "OK")
 	Sleep(1000)
 	If (WinActive("Trend Micro HouseCall", "Unable to complete the download.")) Then
 		MsgBox(48, "Network Connection", "Plug in the proxy and press OK.")
-		_runhc32()
+		_runhc()
 	Else
 		WinWaitClose("HouseCall Download")
 		Sleep(1000)
 		$handle = _IEAttach(WinWaitActive("[CLASS:#32770]"), "embedded")
 		$accept = _IEGetObjById($handle, "r_eula_0")
 		$next = _IEGetObjById($handle, "btn_next")
+		;handle EULA already accepted (above calls set @error to 7 if so)
 		If Not(@error = 7) Then
-		_IEAction($accept, "click")
-		_IEAction($next, "click")
+			_IEAction($accept, "click")
+			_IEAction($next, "click")
+		Else
+			SetError(0)
 		EndIf
 		Sleep(1000)
-		$settings = _IEGetObjById($handle, "Settings")
 		$scan = _IEGetObjById($handle, "ScanNow")
-		_IEAction($settings, "click")
+		;must manually click this since it causes focus loss on the main window
+		ControlClick("[CLASS:#32770]", "", "Internet Explorer_Server1", "left", 2, 463, 188)
 		Sleep(1000)
-		$settingswin = WinGetHandle("[ACTIVE]");trouble
-		$settingshandle = _IEAttach($settingswin, "embedded")
+		$settingshandle = _IEAttach(WinGetHandle("Settings"), "embedded")
 		$full = _IEGetObjById($settingshandle, "type1")
 		$ok = _IEGetObjById($settingshandle, "btn_ok")
 		_IEAction($full, "click")
@@ -1377,28 +1321,28 @@ Func _sfc()
 	GUICtrlSetStyle($progbar, 8)
 	GUICtrlSendMsg($progbar, $pbm_setmarquee, True, 20)
 	GUICtrlSetData($proglabel, "Running System File Check")
-	ShellExecuteWait("C:\Windows\System32\sfc.exe", "/scannow", "", "", @SW_HIDE)
-	Sleep(1000)
-	While (ProcessExists("sfc.exe"))
-		Sleep(100)
-	WEnd
+	$var = Run(@ComSpec & " /C sfc /scannow", "", @SW_HIDE, $STDOUT_CHILD)
+	ProcessWaitClose($var)
+	$text = StdoutRead($var)
+	If Not(StringInStr($text, "pending") = 0) Then
+		MsgBox(0, "SFC Failed", "SFC repairs or Windows Updates required to continue.")
+		_appendlog(2, "System File Checker", "Failed due to pending updates")
+	ElseIf Not(StringInStr($text, "not find any integrity violations") = 0) Then
+		MsgBox(0, "SFC Finished", "SFC did not find any corrupt files")
+		_appendlog(4, "System File Checker", "Did not find any corrupt files")
+	ElseIf Not(StringInStr($text, "unable to fix") = 0) Then
+		MsgBox(0, "SFC Failed", "SFC found corrupt files but could not repair them.")
+		_appendlog(2, "System File Checker", "Found corrupt files but could not repair")
+	ElseIf Not(StringInStr($text, "successfully repaired") = 0) Then
+		MsgBox(0, "SFC Repairs Finished", "SFC found and repaired corrupt files.")
+		_appendlog(3, "System File Checker", "Repaired corrupted files")
+	Else
+		MsgBox(0, "SFC Status Unknown", $text)
+		_appendlog(2, "System File Checker", "Failed with unknown status")
+		_appendlog(5, "DEBUG INFO -SFC-", $text)
+	EndIf
 	GUICtrlSetStyle($progbar, 1)
 	GUICtrlSetData($progbar, 0)
-	GUICtrlSetData($proglabel, "System File Check Complete")
-	$failcount = StringSplit(FileRead(@WindowsDir & "\Logs\CBS\CBS.log"), "[SR] Cannot", 1)[0] - 1
-	$repcount = StringSplit(FileRead(@WindowsDir & "\Logs\CBS\CBS.log"), "[SR] Rep", 1)[0] - 1
-	If (Not $failcount = 0) Then
-		_appendlog(3, "System File Checker", "SFC encountered filesystem corruption it was unable to repair.")
-		MsgBox($mb_iconwarning, "SFC Results", "SFC may have failed to repair issues. See KB2965 to verify.")
-	Else
-		If (Not $repcount = 0) Then
-			MsgBox($mb_iconinformation, "SFC Results", "SFC completed successfully and may have made repairs. See KB2965 to verify.")
-			_appendlog(4, "System File Checker", "Corruption Repaired.")
-		Else
-			MsgBox(64, "SFC Resluts", "SFC completed successfully and has not found any system file corruption.")
-			_appendlog(4, "System File Checker", "No Corruption Found.")
-		EndIf
-	EndIf
 	GUICtrlSetData($proglabel, "ResTool Ready...")
 EndFunc   ;==>_sfc
 
