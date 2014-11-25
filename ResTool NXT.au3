@@ -5,7 +5,7 @@
 #AutoIt3Wrapper_Compression=4
 #AutoIt3Wrapper_Compile_Both=y
 #AutoIt3Wrapper_Res_Description=Automation tool for Residential Technology Helpdesk of Northern Illinois University
-#AutoIt3Wrapper_Res_Fileversion=0.1.141124.0
+#AutoIt3Wrapper_Res_Fileversion=0.1.141125.0
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #Region ###Includes and Compiler Directives
 #include <GUIConstants.au3>
@@ -28,12 +28,13 @@ Opt("GUIOnEventMode", 1)
 #Region ### START Koda GUI section ### Form=C:\Users\ResTech\Desktop\ResToolNxt_Form_New.kxf
 $form = GUICreate("ResTool NXT: Beta!", 330, 460)
 $progbar = GUICtrlCreateProgress(10, 390, 310, 20)
+;set the progress bar to loading while we are waiting for program to init
 GUICtrlSetStyle($progbar, 8)
 GUICtrlSendMsg($progbar, $pbm_setmarquee, True, 20)
 $proglabel = GUICtrlCreateLabel("Initializing ResTool", 10, 420, 310, 17, $ss_center)
 $tab = GUICtrlCreateTab(0, 0, 330, 380)
 $tabsheet1 = GUICtrlCreateTabItem("Virus Removal")
-GUICtrlSetState(-1, $gui_show)
+GUICtrlSetState(-1, $gui_show) ;define the default tab
 $scan = GUICtrlCreateGroup("Antivirus Scans", 10, 42, 95, 310)
 $combofix = GUICtrlCreateButton("ComboFix", 20, 67, 75, 25)
 $malwarebytes = GUICtrlCreateButton("Malwarebytes", 20, 117, 75, 25)
@@ -88,19 +89,17 @@ _GUICtrlStatusBar_SetParts($statusbar1, $statusbar1_partswidth)
 _GUICtrlStatusBar_SetMinHeight($statusbar1, 20)
 GUISetState(@SW_SHOW)
 #EndRegion ### END Koda GUI section ###
+;define a couple things that are freuquently used
 Global $ip = @IPAddress1
 Global $osv = @OSVersion
 Global $osa = @OSArch
 Global $ticketno = RegRead("HKLM\SOFTWARE\ResTech", "TicketNo")
+;define the directory where 32-bit installs reside
 Global $32progfiledir = @ProgramFilesDir & " (x86)"
-_GUICtrlStatusBar_SetText($statusbar1, _readableosv(), 0)
-_GUICtrlStatusBar_SetText($statusbar1, $ip, 1)
 If ($osa = "X86") Then
 	$32progfiledir = @ProgramFilesDir
 EndIf
-If ($osv = "WIN_81") Then
-	GUICtrlSetStyle($combofix, $ws_disabled)
-EndIf
+;update or define the ticket number if necessary
 If (Not $ticketno = "") Then
 	If (_DateDiff("D", RegRead("HKLM\SOFTWARE\ResTech", "LastOpen"), _NowCalc()) >= 7) Then
 		If ($idno = MsgBox($mb_yesno, "Ticket Number Found", "This computer has a ticket number recorded already. Is the current ticket for this computer still TT" & $ticketno & "?")) Then
@@ -115,12 +114,26 @@ Else
 	_setticket()
 	SetError(0)
 EndIf
+;Put things on the status bar
+_GUICtrlStatusBar_SetText($statusbar1, _readableosv(), 0)
+_GUICtrlStatusBar_SetText($statusbar1, $ip, 1)
 _GUICtrlStatusBar_SetText($statusbar1, "TT" & $ticketno, 2)
+;if Auto MSConfig has been toggled to Safe Mode, make the button red to indicate as such
 If(_readregstats("MSCFG") == 1) Then
 	GUICtrlSetColor($msconfig, $COLOR_RED)
 EndIf
+;Remove Startup shortcut to ResTool if it exists
+If (FileExists(@StartupCommonDir & "\RT.lnk")) Then
+	FileDelete(@StartupCommonDir & "\RT.lnk")
+EndIf
+;Attach clicks to functions and disable nonworking fxns
 GUISetOnEvent($gui_event_close, "_Close")
 GUICtrlSetOnEvent($combofix, "_RunCF")
+;disable combofix if Windows 8.1 - incompatible
+If ($osv = "WIN_81") Then
+	GUICtrlSetStyle($combofix, $ws_disabled)
+	GUICtrlSetTip($combofix, "Incompatible with Windows 8.1")
+EndIf
 GUICtrlSetOnEvent($malwarebytes, "_RunMWB")
 GUICtrlSetOnEvent($eset, "_RunESET")
 GUICtrlSetOnEvent($spybot, "_RunSB")
@@ -132,7 +145,6 @@ GUICtrlSetOnEvent($temp, "_tempfr")
 GUICtrlSetOnEvent($mwbar, "") ;_runmwbar
 GUICtrlSetStyle($mwbar, $ws_disabled)
 GUICtrlSetOnEvent($tdss, "_runtdss")
-;GUICtrlSetStyle($tdss, $ws_disabled)
 GUICtrlSetOnEvent($rmscan, "") ;_remscans
 GUICtrlSetStyle($rmscan, $ws_disabled)
 GUICtrlSetOnEvent($mse, "_GetMSE")
@@ -145,6 +157,10 @@ GUICtrlSetOnEvent($speed, "_SpeedTest")
 GUICtrlSetOnEvent($ncprop, "_NetAdapterProperties")
 GUICtrlSetOnEvent($sfc, "_SFC")
 GUICtrlSetOnEvent($dism, "_DISM")
+If Not(($OSV = "WIN_8_1") Or ($OSV = "WIN_8")) Then
+	GuiCtrlSetStyle($dism, $ws_disabled)
+	GUICtrlSetTip($dism, "Incompatible with Windows 7 or earlier")
+EndIf
 GUICtrlSetOnEvent($chkdsk, "_Chkdsk")
 GUICtrlSetOnEvent($aio, "_runaio")
 GUICtrlSetStyle($aio, $ws_disabled)
@@ -156,14 +172,13 @@ GUICtrlSetOnEvent($rmmse, "") ;_rmmse
 GUICtrlSetStyle($rmmse, $ws_disabled)
 GUICtrlSetOnEvent($cpl, "_OpenControlPanel")
 GUICtrlSetOnEvent($regedit, "_regedit")
-GUICtrlSetStyle($regedit, $ws_disabled)
 GUICtrlSetOnEvent($msconfig, "_togglemsconfig")
 GUICtrlSetOnEvent($print, "_anyprint")
 GUICtrlSetOnEvent($auto, "_EasterEgg")
 GUICtrlSetData($proglabel, "ResTool Ready...")
 GUICtrlSetStyle($progbar, 1)
 GUICtrlSetData($progbar, 0)
-Run(@ComSpec & " /c " & "mkdir " & "C:\ResTech", "", @SW_HIDE)
+;main program loop.
 While 1
 	Sleep(100)
 WEnd
@@ -1294,14 +1309,35 @@ DATE OF LAST UPDATE: A Long Time Ago
 NOTES: Totally cheats at life. Needs to actually find errors before doing /f
 #ce -----------------------------------------------------------------------------
 Func _chkdsk()
-	_appendlog(5, "Check Disk", "This program will run at next reboot. Results unknown.")
-	ShellExecuteWait("fsutil", "dirty set c:")
-	If (MsgBox($mb_yesno, "Chkdsk queued", "Chkdsk is scheduled to scan the hard drive at next boot. Would you like to restart now?") == $idyes) Then
-		ShellExecute("shutdown", "/r /t 0", "", "", @SW_HIDE)
+	_appendlog(1, "Disk Check")
+	GUICtrlSetStyle($progbar, 8)
+	GUICtrlSendMsg($progbar, $pbm_setmarquee, True, 20)
+	GUICtrlSetData($proglabel, "Running System File Check")
+	$var = Run(@ComSpec & " /c" & '%systemroot%\system32\chkdsk.exe C: > ' & @ScriptDir & "\Logs\chkdsk.txt","", @SW_HIDE)
+	ProcessWaitClose($var)
+	$fd = FileOpen(@ScriptDir & "\Logs\chkdsk.txt")
+	$text = FileRead($fd)
+	If (StringInStr($text, "problems") = 0) Then
+		MsgBox(0, "No Errors", "Chkdsk did not find any errors")
+		_appendlog(4, "Disk Check")
 	Else
-		MsgBox(0, "Chkdsk queued", "Chkdsk will run the next time the computer restarts.")
+		If (MsgBox($mb_yesno, "Errors Found", "Should I schedule a repair at next boot?") == $idyes) Then
+			ShellExecuteWait("fsutil", "dirty set c:")
+			If (MsgBox($mb_yesno, "Chkdsk queued", "Chkdsk is scheduled to repair the hard drive at next boot. Would you like to restart now?") == $idyes) Then
+				_queuestartup()
+				_appendlog(3, "Disk Check", "Errors Found, Restarting to fix.")
+				ShellExecute("shutdown", "/r /t 0", "", "", @SW_HIDE)
+			Else
+				_appendLog(3, "Disk Check", "Errors found, Will fix at next restart.")
+				MsgBox(0, "Chkdsk queued", "Chkdsk will run the next time the computer restarts.")
+			EndIf
+		Else
+		_appendlog(4, "Disk Check", "Errors Found but no repair queued.")
+		MsgBox(0, "Chkdsk Not Queued", "Chkdsk will not fix disk errors.")
+		EndIf
 	EndIf
-	GUICtrlSetData($proglabel, "Chkdsk scan successfully queued.")
+	FileClose($fd)
+	FileDelete(@ScriptDir & "\Logs\chkdsk.txt")
 EndFunc   ;==>_chkdsk
 
 #cs -----------------------------------------------------------------------------
@@ -1410,13 +1446,12 @@ Func _dism()
 	ShellExecuteWait("dism", "/Online /Cleanup-Image /RestoreHealth", "", "", @SW_HIDE)
 	GUICtrlSetStyle($progbar, 1)
 	GUICtrlSetData($progbar, 0)
-	$failcount = StringSplit(FileRead(@WindowsDir & "\Logs\dism\dism.log"), "(restorehealth)", 1)[0] - 1
-	If (Not $failcount = 0) Then
-		_appendlog(2, "Deployment Image Servicing and Management Tool", "DISM can't run on this computer")
-		MsgBox($mb_iconwarning, "DISM", "DISM cannot run on this computer.")
+	If (StringInStr(FileRead(@WindowsDir & "\Logs\dism\dism.log"), "Failed to restore the image health", 1)) Then
+		_appendlog(2, "Deployment Image Servicing and Management Tool", "DISM failed to reapair system file corruption")
+		MsgBox($mb_iconwarning, "DISM", "DISM failed to restore the image health")
 	Else
 		_appendlog(4, "Deployment Image Servicing and Management Tool")
-		MsgBox(0, "DISM", "DISM Completed without error, but the results are unknown")
+		MsgBox(0, "DISM", "DISM Completed without error, but whether it made repairs or not is unknown")
 	EndIf
 	GUICtrlSetData($proglabel, "ResTool Ready.")
 EndFunc   ;==>_dism
