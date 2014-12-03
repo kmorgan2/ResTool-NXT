@@ -5,7 +5,7 @@
 #AutoIt3Wrapper_Compression=4
 #AutoIt3Wrapper_Compile_Both=y
 #AutoIt3Wrapper_Res_Description=Automation tool for Residential Technology Helpdesk of Northern Illinois University
-#AutoIt3Wrapper_Res_Fileversion=0.1.141125.1
+#AutoIt3Wrapper_Res_Fileversion=0.1.141202.0
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #Region ###Includes and Compiler Directives
 #include <GUIConstants.au3>
@@ -166,8 +166,8 @@ GUICtrlSetOnEvent($aio, "_runaio")
 ;GUICtrlSetStyle($aio, $ws_disabled)
 GUICtrlSetOnEvent($defrag, "_Defraggle")
 GUICtrlSetOnEvent($devmgr, "_Devmgmt")
-GUICtrlSetOnEvent($rmnac, "") ;_rmnac
-GUICtrlSetStyle($rmnac, $ws_disabled)
+GUICtrlSetOnEvent($rmnac, "_rmnac") ;_rmnac
+;GUICtrlSetStyle($rmnac, $ws_disabled)
 GUICtrlSetOnEvent($rmmse, "") ;_rmmse
 GUICtrlSetStyle($rmmse, $ws_disabled)
 GUICtrlSetOnEvent($cpl, "_OpenControlPanel")
@@ -954,6 +954,34 @@ Func _runtdss()
 EndFunc
 #EndRegion ###Scanners
 #Region ###OS
+#cs -----------------------------------------------------------------------------
+FUNCTION: _rmnac
+
+PURPOSE: Uninstalls Cisco NAC Agent
+
+AUTHOR: Kevin Morgan
+
+DATE OF LAST UPDATE: 12/2/14
+
+NOTES:
+#ce -----------------------------------------------------------------------------
+Func _rmnac()
+	GUICtrlSetStyle($progbar, 8)
+	GUICtrlSendMsg($progbar, $pbm_setmarquee, True, 20)
+	GUICtrlSetData($proglabel, "Removing Cisco NAC Agent")
+	_appendlog(1, "NAC Uninstall")
+	ShellExecute("C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Cisco\Cisco NAC Agent\Uninstall Cisco NAC Agent.lnk")
+	WinWait("Windows Installer", "")
+	ControlClick("Windows Installer", "", "Button1")
+	Sleep(1000)
+	WinWait("Windows Installer", "")
+	WinWait("Cisco NAC Agent ", "")
+	WinWaitClose("Cisco NAC Agent ", "")
+	_appendlog(4, "NAC Uninstall")
+	GUICtrlSetStyle($progbar, 1)
+	GUICtrlSetData($progbar, 0)
+	GUICtrlSetData($proglabel, "ResTool Ready...")
+EndFunc
 #cs -----------------------------------------------------------------------------
 FUNCTION: _anyprint()
 
