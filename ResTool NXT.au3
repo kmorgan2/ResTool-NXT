@@ -5,7 +5,7 @@
 #AutoIt3Wrapper_Compression=4
 #AutoIt3Wrapper_Compile_Both=y
 #AutoIt3Wrapper_Res_Description=Automation tool for Residential Technology Helpdesk of Northern Illinois University
-#AutoIt3Wrapper_Res_Fileversion=0.1.141202.0
+#AutoIt3Wrapper_Res_Fileversion=0.1.141204.0
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #Region ###Includes and Compiler Directives
 #include <GUIConstants.au3>
@@ -142,8 +142,8 @@ GUICtrlSetOnEvent($housecall, "_RunHC")
 GUICtrlSetOnEvent($ccleaner, "_RunCC")
 GUICtrlSetOnEvent($programs, "_ProgFeat")
 GUICtrlSetOnEvent($temp, "_tempfr")
-GUICtrlSetOnEvent($mwbar, "") ;_runmwbar
-GUICtrlSetStyle($mwbar, $ws_disabled)
+GUICtrlSetOnEvent($mwbar, "_runmwbar")
+;GUICtrlSetStyle($mwbar, $ws_disabled)
 GUICtrlSetOnEvent($tdss, "_runtdss")
 GUICtrlSetOnEvent($rmscan, "") ;_remscans
 GUICtrlSetStyle($rmscan, $ws_disabled)
@@ -911,7 +911,41 @@ Func _runcc()
 	GUICtrlSetData($progbar, 0)
 	GUICtrlSetData($proglabel, "ResTool Ready...")
 EndFunc   ;==>_runcc
+#cs -----------------------------------------------------------------------------
+FUNCTION: _runmwbar()
 
+PURPOSE: Runs Malwarebytes' Anti Malware
+
+AUTHOR: Kevin Morgan
+
+DATE OF LAST UPDATE: 12/4/14
+
+NOTES:
+#ce -----------------------------------------------------------------------------
+Func _runmwbar()
+	GUICtrlSetStyle($progbar, 8)
+	GUICtrlSendMsg($progbar, $pbm_setmarquee, True, 20)
+	GUICtrlSetData($proglabel, "MWBAR Running")
+	_appendlog(1, "MWBAR")
+	Run(@ScriptDir & "\Script\Scanners\MWBAR.exe")
+	WinWait("Malwarebytes Anti-Rootkit", "")
+	ControlClick("Malwarebytes Anti-Rootkit", "", "Button2")
+	WinWait("Malwarebytes Anti-Rootkit BETA v1.08.2.1001", "")
+	Send("!n")
+	Sleep(1000)
+	Send("{TAB}{TAB}{ENTER}")
+	Sleep(60000);wait for update for an entire minute
+	Send("{TAB}{TAB}{TAB}{ENTER}")
+	MsgBox($MB_TOPMOST, "Wait for scan to complete", "Close this message box when MWBAR is finished scanning completely.")
+	Send("!n")
+	MsgBox($MB_TOPMOST, "View Results", "Results should be showing. Record them and then close this dialog")
+	MsgBox($MB_TOPMOST, "Confirm Close", "Don't close this until you've actually recorded the results!")
+	Send("!e")
+	GUICtrlSetStyle($progbar, 1)
+	GUICtrlSetData($progbar, 0)
+	GUICtrlSetData($proglabel, "ResTool Ready...")
+	_appendlog(4, "MWBAR")
+EndFunc
 #cs -----------------------------------------------------------------------------
 FUNCTION: _runtdss()
 
