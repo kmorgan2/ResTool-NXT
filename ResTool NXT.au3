@@ -5,7 +5,7 @@
 #AutoIt3Wrapper_Compression=4
 #AutoIt3Wrapper_Compile_Both=y
 #AutoIt3Wrapper_Res_Description=Automation tool for Residential Technology Helpdesk of Northern Illinois University
-#AutoIt3Wrapper_Res_Fileversion=0.1.141211.0
+#AutoIt3Wrapper_Res_Fileversion=0.1.141211.1
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #Region ###Includes and Compiler Directives
 #include <GUIConstants.au3>
@@ -374,6 +374,96 @@ Func _readregstats($shortcode)
 EndFunc   ;==>_readregstats
 #EndRegion ###AutoHelpers
 #Region ###Helpers
+#Region ###Helpers-ErrorHandling
+#cs ---------------------------------------------------------------------------
+FUNCTION: _debugwaitclick()
+
+PURPOSE: Perform a WinWait and ControlClick in succession with error handling
+		 for any issues that arise
+
+AUTHOR: Kevin Morgan
+
+DATE OF LAST UPDATE: 12/11/14
+
+NOTES:
+#ce -----------------------------------------------------------------------------
+Func _debugwaitclick($title, $control, $text = "", $timeout = 300000, $button = "left", $clicks = 1, $x = 0, $y = 0)
+	$hWnd = WinWait($title, $text, $timeout)
+	If $hWnd = 0 Then
+		_appendLog(2, "AutoIt", 'No window found with Title "' & $title & '" and text "' & $text & '"')
+		Return 0
+	EndIf
+	WinActivate($title, $text)
+	Sleep(100)
+	$ccresult = ControlClick($title, $text, $control, $button, $clicks, $x, $y)
+	If 	$ccresult = 0 Then
+		_appendLog(2, "AutoIt", 'No control found with ClassnameNN "' &	$control & '", in window with Title "' & $title & '" and text "' & $text & '"')
+		Return 0
+	EndIf
+	Return 1
+EndFunc
+#cs ---------------------------------------------------------------------------
+FUNCTION: _debugprocesswaitclose()
+
+PURPOSE: Handle errors in a ProcessWait statement
+
+AUTHOR: Kevin Morgan
+
+DATE OF LAST UPDATE: 12/11/14
+
+NOTES:
+#ce -----------------------------------------------------------------------------
+Func _debugprocesswaitclose($process, $timeout = 60000)
+	$proc = ProcessWaitClose($process)
+	If $proc = 0 Then
+		_appendLog(2, "AutoIt", $process & ' did not open in ' & ($timeout / 1000) & ' seconds')
+		Return 0
+	EndIf
+	Return 1
+EndFunc
+#cs ---------------------------------------------------------------------------
+FUNCTION: _debugprocesswait()
+
+PURPOSE: Handle errors in a ProcessWaitClose statement
+
+AUTHOR: Kevin Morgan
+
+DATE OF LAST UPDATE: 12/11/14
+
+NOTES:
+#ce -----------------------------------------------------------------------------
+Func _debugprocesswait($process, $timeout = 1800000)
+	$proc = ProcessWait($process)
+	If $proc = 0 Then
+		_appendLog(2, "AutoIt", $process & ' did not close in ' & ($timeout / 6000) & ' minutes')
+		Return 0
+	ElseIf @extended = 0xCCCCCCCC Then
+		_appendLog(2, "AutoIt", $process & ' did not exist.')
+		SetError(0)
+	EndIf
+	Return 1
+EndFunc
+#cs ---------------------------------------------------------------------------
+FUNCTION: _debugwinwait()
+
+PURPOSE: Perform a WinWait and ControlClick in succession with error handling
+		 for any issues that arise
+
+AUTHOR: Kevin Morgan
+
+DATE OF LAST UPDATE: 12/11/14
+
+NOTES:
+#ce -----------------------------------------------------------------------------
+Func _debugwinwait($title, $control, $text = "", $timeout = 300000)
+	$hWnd = WinWait($title, $text, $timeout)
+	If $hWnd = 0 Then
+		_appendLog(2, "AutoIt", 'No window found with Title "' & $title & '" and text "' & $text & '"')
+		Return 0
+	EndIf
+	Return 1
+EndFunc
+#EndRegion
 #cs ---------------------------------------------------------------------------
 FUNCTION: _start()
 
@@ -555,25 +645,6 @@ Func _appendlog($code, $prog, $msg = "")
 	FileClose($logfile)
 EndFunc   ;==>_appendlog
 #cs -----------------------------------------------------------------------------
-FUNCTION: _winwaitnotify()
-
-PURPOSE: Wrapper for WinWait that pops up a messagebox if the timeout is reached
-
-AUTHOR: Kevin Morgan
-
-DATE OF LAST UPDATE: A Long Time Ago
-
-NOTES: Due to incompatibilities with some processes, default timeout is set to
-	   0/unlimited, which renders this function pretty much useless.
-	   a better implementation is in the works with _waitclick
-#ce -----------------------------------------------------------------------------
-Func _winwaitnotify($title, $text, $controltitle, $timeout = 0)
-	If (WinWait($title, $text, $timeout) = 0) Then
-		MsgBox($mb_yesno, "Couldn't find " & $title, "ResTool could not find the window titled " & $title & "." & @CRLF & "Please continue to this window and click " & $controltitle & ".")
-	EndIf
-EndFunc   ;==>_winwaitnotify
-
-#cs -----------------------------------------------------------------------------
 FUNCTION: _queuestartup()
 
 PURPOSE: Creates a shortcut to run ResTool at startup
@@ -588,32 +659,6 @@ NOTES: Really need an _unqueuestartup. Not Used. Planned for forced-restarts
 Func _queuestartup()
 	FileCreateShortcut(@ScriptFullPath, @StartupCommonDir & "\RT.lnk")
 EndFunc   ;==>_queuestartup
-
-#cs -----------------------------------------------------------------------------
-FUNCTION: _waitclick()
-
-PURPOSE: Handles a WinWait/ControlClick combo where there is a possibility that
-		 AutoIt may miss the window
-
-AUTHOR: Kevin Morgan
-
-DATE OF LAST UPDATE: Somewhat Recently
-
-NOTES: Not yet used. Default timeout is useless. Gives user option to terminate
-	   script. Needs timings or a better way to detect control clickability.
-#ce -----------------------------------------------------------------------------
-Func _waitclick($title, $text, $control, $timeout = 0)
-	If (WinWait($title, $text, $timeout) = 0) Then
-		If (MsgBox($mb_yesno, "Couldn't find " & $title, "ResTool could not find the window titled " & $title & "." & @CRLF & "Continue to this window and click " & $control & @CRLF & ". Continue execution?") = $idyes) Then
-		Else
-			Run(@ScriptDir & "\ResTool NXT_x64.exe")
-			Exit
-		EndIf
-	Else
-		ControlClick($title, $text, $control, "left", 1)
-	EndIf
-EndFunc   ;==>_waitclick
-
 #EndRegion ###Helpers
 #Region ###AutoScanners
 #cs -----------------------------------------------------------------------------
@@ -851,10 +896,10 @@ Func _runmwb()
 			EndIf
 		ElseIf (WinActive("Malwarebytes Anti-Malware", "latest version")) Then
 			ControlClick("Malwarebytes Anti-Malware", "", 2)
-			_winwaitnotify("Malwarebytes Anti-Malware", "database was successfully", "OK")
+			WinWait("Malwarebytes Anti-Malware", "database was successfully")
 			Send("{ENTER}")
 		Else
-			_winwaitnotify("Malwarebytes Anti-Malware", "database was successfully", "OK")
+			WinWait("Malwarebytes Anti-Malware", "database was successfully")
 			Send("{ENTER}")
 		EndIf
 	EndIf
@@ -862,10 +907,10 @@ Func _runmwb()
 	If (WinActive("Malwarebytes Anti-Malware", "latest version")) Then
 		ControlClick("Malwarebytes Anti-Malware", "", 2)
 	EndIf
-	_winwaitnotify("Malwarebytes Anti-Malware", "Perform", "Full Scan and Start")
+	WinWait("Malwarebytes Anti-Malware", "Perform")
 	ControlClick("Malwarebytes Anti-Malware", "Perform", 69)
 	ControlClick("Malwarebytes Anti-Malware", "Perform", 71)
-	_winwaitnotify("Full scan", "", "Drive selection")
+	WinWait("Full scan", "")
 	Send("{ENTER}")
 	While (Not ProcessExists("notepad.exe"))
 		Sleep(100)
@@ -889,25 +934,25 @@ NOTES: Might miss a dialog once in a blue moon, but is otherwise super reliable
 #ce -----------------------------------------------------------------------------
 Func _installmwb()
 	Run(@ScriptDir & "\Script\Scanners\MWB\MWB.exe")
-	_winwaitnotify("Select Setup Language", "", "Next")
+	WinWait("Select Setup Language", "")
 	Send("{ENTER}")
-	_winwaitnotify("Setup - Malwarebytes Anti-Malware", "Welcome", "Next")
+	WinWait("Setup - Malwarebytes Anti-Malware", "Welcome")
 	Send("{ENTER}")
-	_winwaitnotify("Setup - Malwarebytes Anti-Malware", "License", "Next")
+	WinWait("Setup - Malwarebytes Anti-Malware", "License")
 	Send("{TAB}A{ENTER}")
-	_winwaitnotify("Setup - Malwarebytes Anti-Malware", "Information", "Next")
+	WinWait("Setup - Malwarebytes Anti-Malware", "Information")
 	Send("{ENTER}")
-	_winwaitnotify("Setup - Malwarebytes Anti-Malware", "Select Destination", "Next")
+	WinWait("Setup - Malwarebytes Anti-Malware", "Select Destination")
 	Send("{ENTER}")
 	Sleep(1000)
 	If WinExists("Folder Exists") Then
 		Send("{ENTER}")
 	EndIf
-	_winwaitnotify("Setup - Malwarebytes Anti-Malware", "Select Start", "Next")
+	WinWait("Setup - Malwarebytes Anti-Malware", "Select Start")
 	Send("{ENTER}")
-	_winwaitnotify("Setup - Malwarebytes Anti-Malware", "Select Additional", "Next")
+	WinWait("Setup - Malwarebytes Anti-Malware", "Select Additional")
 	Send("{ENTER}")
-	_winwaitnotify("Setup - Malwarebytes Anti-Malware", "Ready", "Next")
+	WinWait("Setup - Malwarebytes Anti-Malware", "Ready")
 	Send("{ENTER}")
 	Sleep(1000)
 	If WinExists("Setup - Malwarebytes Anti-Malware", "Preparing") Then
@@ -915,7 +960,7 @@ Func _installmwb()
 		Sleep(10000)
 		Send("{ENTER}")
 	EndIf
-	_winwaitnotify("Setup - Malwarebytes Anti-Malware", "Completing", "Finish")
+	WinWait("Setup - Malwarebytes Anti-Malware", "Completing")
 	Send(" ")
 	Send("{TAB}")
 	Send(" ")
@@ -941,7 +986,7 @@ Func _runeset()
 	GUICtrlSetStyle($progbar, 8)
 	GUICtrlSendMsg($progbar, $pbm_setmarquee, True, 20)
 	Run(@ScriptDir & "\Script\Scanners\ESET\ESET.exe")
-	_winwaitnotify("Terms of use", "", "Accept and Next")
+	WinWait("Terms of use", "")
 	ControlClick("Terms of use", "", 107)
 	ControlClick("Terms of use", "", 105)
 	Sleep(10000)
@@ -956,7 +1001,7 @@ Func _runeset()
 			ControlClick("Downloading ESET Online Scanner...", "", 109)
 		EndIf
 	EndIf
-	_winwaitnotify("ESET Online Scanner", "unwanted", "Enable detection and Start")
+	WinWait("ESET Online Scanner", "unwanted")
 	Sleep(1000)
 	ControlClick("ESET Online Scanner", "unwanted", 346)
 	ControlClick("ESET Online Scanner", "unwanted", 321)
@@ -987,19 +1032,19 @@ Func _runsb()
 	If (Not FileExists($32progfiledir & "\Spybot - Search & Destroy 2\SDUpdate.exe")) Then
 		GUICtrlSetData($proglabel, "Installing Spybot")
 		Run(@ScriptDir & "\Script\Scanners\SB\SB.exe")
-		_winwaitnotify("Select Setup Language", "", "Next")
+		WinWait("Select Setup Language", "")
 		Send("{ENTER}")
-		_winwaitnotify("Setup - Spybot - Search & Destroy", "", "Next")
+		WinWait("Setup - Spybot - Search & Destroy", "")
 		Send("{ENTER}")
-		_winwaitnotify("Setup - Spybot - Search & Destroy", "Donations", "Next")
+		WinWait("Setup - Spybot - Search & Destroy", "Donations")
 		Send("{ENTER}")
-		_winwaitnotify("Setup - Spybot - Search & Destroy", "Installation &", "Next")
+		WinWait("Setup - Spybot - Search & Destroy", "Installation &")
 		Send("{ENTER}")
-		_winwaitnotify("Setup - Spybot - Search & Destroy", "License", "Accept and Next")
+		WinWait("Setup - Spybot - Search & Destroy", "License")
 		Send("{TAB}")
 		Send("A")
 		Send("{ENTER}")
-		_winwaitnotify("Setup - Spybot - Search & Destroy", "Ready", "Next")
+		WinWait("Setup - Spybot - Search & Destroy", "Ready")
 		Send("{ENTER}")
 		If (WinExists("Setup - Spybot - Search & Destroy", "Preparing to Install")) Then
 			If ($idyes = MsgBox($mb_yesno, "Restart required", "Restart to complete SB installation?")) Then
@@ -1010,7 +1055,7 @@ Func _runsb()
 				_appendlog(3, "Spybot Search & Destroy", "Required a restart to complete installation")
 			EndIf
 		EndIf
-		_winwaitnotify("Setup - Spybot - Search & Destroy", "Completing", "Finish")
+		WinWait("Setup - Spybot - Search & Destroy", "Completing")
 		Send("{ENTER}")
 	EndIf
 	If (ProcessExists("SDWelcome.exe")) Then
@@ -1060,29 +1105,29 @@ Func _runsas()
 	GUICtrlSetData($proglabel, "SUPERAntiSpyware Running")
 	If (Not FileExists(@ProgramFilesDir & "\SUPERAntiSpyware\SUPERAntiSpyware.exe")) Then
 		Run(@ScriptDir & "\Script\Scanners\SAS\SAS.exe")
-		_winwaitnotify("SUPERAntiSpyware Setup", "", "Custom Install")
+		WinWait("SUPERAntiSpyware Setup", "")
 		If (1 = MsgBox(0, "ResFail: No Automation", "Please click the Custom Install button.")) Then
 		EndIf
-		_winwaitnotify("SUPERAntiSpyware Free Edition Setup", "", "Next")
+		WinWait("SUPERAntiSpyware Free Edition Setup", "")
 		ControlClick("SUPERAntiSpyware Free Edition Setup", "", 1)
 		ControlClick("SUPERAntiSpyware Free Edition Setup", "", 1)
 		ControlClick("SUPERAntiSpyware Free Edition Setup", "", 1)
-		_winwaitnotify("SUPERAntiSpyware Free Edition Setup", "Configuration", "Next")
+		WinWait("SUPERAntiSpyware Free Edition Setup", "Configuration")
 		ControlClick("SUPERAntiSpyware Free Edition Setup", "", 1)
 		ControlClick("SUPERAntiSpyware Free Edition Setup", "", 2)
-		_winwaitnotify("SUPERAntiSpyware Professional Trial", "", "Decline")
+		WinWait("SUPERAntiSpyware Professional Trial", "")
 		ControlClick("SUPERAntiSpyware Professional Trial", "", 2)
 	Else
 		Run(@ProgramFilesDir & "\SUPERAntiSpyware\SUPERAntiSpyware.exe")
 		Run(@ProgramFilesDir & "\SUPERAntiSpyware\SUPERAntiSpyware.exe")
 	EndIf
 	_appendlog(1, "SUPERAntiSpyware")
-	_winwaitnotify("SUPERAntiSpyware Free Edition", "Complete Scan", "Update, Complete Scan and Scan your Computer...")
+	WinWait("SUPERAntiSpyware Free Edition", "Complete Scan")
 	ControlClick("SUPERAntiSpyware Free Edition", "", 1011)
 	Sleep(60000)
 	ControlClick("SUPERAntiSpyware Free Edition", "", 1073)
 	ControlClick("SUPERAntiSpyware Free Edition", "", 1090)
-	_winwaitnotify("SUPERAntiSpyware Free Edition", "Scan Boost", "High Boost and Start Complete Scan.")
+	WinWait("SUPERAntiSpyware Free Edition", "Scan Boost")
 	ControlClick("SUPERAntiSpyware Free Edition", "", "[CLASS:Button; INSTANCE:19]")
 	Send("{+}")
 	ControlClick("SUPERAntiSpyware Free Edition", "", 1008)
@@ -1115,7 +1160,7 @@ Func _runhc()
 	EndIf
 	_appendlog(1, "Trend Micro HouseCall")
 	Run(@ScriptDir & "\Script\Scanners\HC\HC" & $ver & ".exe")
-	_winwaitnotify("HouseCall Download", "", "OK")
+	WinWait("HouseCall Download", "")
 	Sleep(1000)
 	If (WinActive("Trend Micro HouseCall", "Unable to complete the download.")) Then
 		MsgBox(48, "Network Connection", "Plug in the proxy and press OK.")
@@ -1170,18 +1215,18 @@ Func _runcc()
 	GUICtrlSetData($proglabel, "CCleaner Running")
 	If (Not FileExists(@ProgramFilesDir & "\CCleaner\CCleaner.exe")) Then
 		Run(@ScriptDir & "\Script\CC.exe")
-		_winwaitnotify("CCleaner Professional Setup", "Welcome", "Next")
+		WinWait("CCleaner Professional Setup", "Welcome")
 		ControlClick("CCleaner Professional Setup", "", 1)
-		_winwaitnotify("CCleaner Professional Setup", "Automatically check for updates to CCleaner", "Next")
+		WinWait("CCleaner Professional Setup", "Automatically check for updates to CCleaner")
 		Send("{ENTER}")
 		If (WinExists("CCleaner Professional Setup", "Free! Google")) Then
 			ControlClick("CCleaner Professional Setup", "", "[CLASS:Internet Explorer_Server; INSTANCE:1]", "left", 1, 29, 156)
 		EndIf
 		Send("{ENTER}")
-		_winwaitnotify("CCleaner Professional Setup", "Release notes", "Finish", 90)
+		WinWait("CCleaner Professional Setup", "Release notes")
 		ControlClick("CCleaner Professional Setup", "", 1204)
 		ControlClick("CCleaner Professional Setup", "", 1)
-		_winwaitnotify("CCleaner Professional", "", "Close")
+		WinWait("CCleaner Professional", "")
 		WinClose("CCleaner Professional")
 	Else
 		If ($osv = "X86") Then
@@ -1190,14 +1235,14 @@ Func _runcc()
 			Run(@ProgramFilesDir & "\CCleaner\CCleaner64.exe")
 		EndIf
 	EndIf
-	_winwaitnotify("CCleaner Professional", "", "Close")
+	WinWait("CCleaner Professional", "")
 	WinClose("CCleaner Professional")
 	_appendlog(1, "CCleaner File Cleaner")
-	_winwaitnotify("Piriform CCleaner - Professional Edition", "", "Run Cleaner")
+	WinWait("Piriform CCleaner - Professional Edition", "")
 	ControlClick("Piriform CCleaner - Professional Edition", "", 1021)
-	_winwaitnotify("", "This process will ", "OK")
+	WinWait("", "This process will ")
 	Send("{ENTER}")
-	_winwaitnotify("Piriform CCleaner - Professional Edition", "CLEANING", "Registry")
+	WinWait("Piriform CCleaner - Professional Edition", "CLEANING")
 	$results = StringSplit(WinGetText("Piriform CCleaner - Professional Edition"), @LF, 1)[8]
 	MsgBox(0, "", $results)
 	_appendlog(4, "CCleaner File Cleaner", $results)
@@ -1216,9 +1261,9 @@ Func _runcc()
 		WEnd
 		If ControlCommand($title, $text, "Button3", "IsEnabled") Then
 			ControlClick($title, $text, "Button3")
-			_winwaitnotify("CCleaner", "", "Yes")
+			WinWait("CCleaner", "")
 			ControlClick("CCleaner", "", 6)
-			_winwaitnotify("Save As", "", "Save")
+			WinWait("Save As", "")
 			Sleep(1000)
 			Local $ccrfile = StringSplit(WinGetText("Save As"), @LF)[5]
 			Send("{ENTER}")
