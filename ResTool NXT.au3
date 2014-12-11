@@ -5,7 +5,7 @@
 #AutoIt3Wrapper_Compression=4
 #AutoIt3Wrapper_Compile_Both=y
 #AutoIt3Wrapper_Res_Description=Automation tool for Residential Technology Helpdesk of Northern Illinois University
-#AutoIt3Wrapper_Res_Fileversion=0.1.141204.0
+#AutoIt3Wrapper_Res_Fileversion=0.1.141211.0
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #Region ###Includes and Compiler Directives
 #include <GUIConstants.au3>
@@ -183,7 +183,231 @@ While 1
 	Sleep(100)
 WEnd
 #EndRegion ###Program Init and Loop
+#Region ###AutoHelpers
+#cs ---------------------------------------------------------------------------
+FUNCTION: _automode()
+
+PURPOSE: Controls the operation of AutoMode. Currently not invoked, waiting
+		 for Auto Mode functions to be ready. Will be bound to fix everything
+		 button on Auto tab of GUI.
+
+AUTHOR: Kevin Morgan
+
+DATE OF LAST UPDATE: 12/11/14
+
+NOTES:
+#ce -----------------------------------------------------------------------------
+Func _automode()
+	_appendLog(1, "Automated Removal Mode")
+	While (Not _autoallclear)
+		$next = _getnextscan()
+		If (_readregstats($next) = 0) Then
+			_writelastscan($next)
+		Else
+			_autorun($next)
+		EndIf
+
+	_appendLog(4, "Automated Removal Mode")
+	_autoCC()
+	_autoSFC()
+	WEnd
+EndFunc
+#cs ---------------------------------------------------------------------------
+FUNCTION: _autoappendlog()
+
+PURPOSE: Appends to a log file stored on disk with title, called by _auto(scan)
+		 methods
+
+AUTHOR: Kevin Morgan
+
+DATE OF LAST UPDATE: 12/11/14
+
+NOTES:
+#ce -----------------------------------------------------------------------------
+Func _autoappendlog($shortcode, $results = -1, $message = "")
+	Local $log = StringLeft(@ScriptDir, 3) & "Logs\Auto" & $ticketno & ".txt"
+	If (Not FileExists($log)) Then
+		_FileCreate($log)
+	EndIf
+	$logfile = FileOpen($log, 1)
+	If $results = -1 Then
+		FileWriteLine($logfile, $shortcode & " - " & _readregstats($shortcode))
+	ElseIf $message = "" Then
+		FileWriteLine($logfile, $shortcode & " - " & $results)
+	Else
+		FileWriteLine($logfile, $shortcode & " - " & $message)
+	EndIf
+EndFunc
+#cs ---------------------------------------------------------------------------
+FUNCTION: _autoallclear()
+
+PURPOSE: Returns true when all scans have reached 0 0
+
+AUTHOR: Kevin Morgan
+
+DATE OF LAST UPDATE: 12/11/14
+
+NOTES:
+#ce -----------------------------------------------------------------------------
+Func _autoallclear()
+	$cfstat = Not(_readregstats("CF"))
+	$mwbstat = Not(_readregstats("MWB"))
+	$esetstat = Not(_readregstats("ESET"))
+	$sbstat = Not(_readregstats("SB"))
+	$sasstat = Not(_readregstats("SAS"))
+	$hcstat = Not(_readregstats("HC"))
+	Return $cfstat & $mwbstat & $esetstat & $sbstat & $sasstat & $hcstat
+EndFunc
+#cs ---------------------------------------------------------------------------
+FUNCTION: _autorun()
+
+PURPOSE: Converts shortcode notation to function calls
+
+AUTHOR: Kevin Morgan
+
+DATE OF LAST UPDATE: 12/11/14
+
+NOTES:
+#ce -----------------------------------------------------------------------------
+Func _autorun($shortcode)
+	If $shortcode = "CF" Then
+		_autocf()
+	ElseIf $shortcode = "MWB" Then
+		_automwb()
+	ElseIf $shortcode = "ESET" Then
+		_autoeset()
+	ElseIf $shortcode = "SB" Then
+		_autosb()
+	ElseIf $shortcode = "SAS" Then
+		_autosas()
+	ElseIf $shortcode = "HC" Then
+		_autohc()
+	Else
+		_autocf()
+		$shortcode = "CF"
+	EndIf
+	_writelastscan($shortcode)
+EndFunc
+#cs ---------------------------------------------------------------------------
+FUNCTION: _getnextscan()
+
+PURPOSE: Determines the next scan to run based on the last scan ran/skipped
+
+AUTHOR: Kevin Morgan
+
+DATE OF LAST UPDATE: 12/11/14
+
+NOTES:
+#ce -----------------------------------------------------------------------------
+Func _getnextscan()
+	SetError(0)
+	$shortcode = RegRead("HKLM\SOFTWARE\ResTech\AutoStats" , "LastScan")
+	If (@error = 0) Then
+		If $shortcode = "CF" Then
+			Return "MWB"
+		ElseIf $shortcode = "MWB" Then
+			Return "ESET"
+		ElseIf $shortcode = "ESET" Then
+			Return "SB"
+		ElseIf $shortcode = "SB" Then
+			Return "SAS"
+		ElseIf $shortcode = "SAS" Then
+			Return "HC"
+		ElseIf $shortcode = "HC" Then
+			Return "CF"
+		Else
+			Return "CF"
+		EndIf
+	Else
+		Return "CF"
+	EndIf
+EndFunc
+#cs ---------------------------------------------------------------------------
+FUNCTION: _writelastscan()
+
+PURPOSE: Stores information indicating the last scan ran using the registry
+
+AUTHOR: Kevin Morgan
+
+DATE OF LAST UPDATE: 12/11/14
+
+NOTES:
+#ce -----------------------------------------------------------------------------
+Func _writelastscan($shortcode)
+	RegWrite("HKLM\SOFTWARE\ResTech\AutoStats", "LastScan", "REG_SZ", $shortcode)
+EndFunc
+#cs -----------------------------------------------------------------------------
+FUNCTION: _writeregstats()
+
+PURPOSE: Creates and or modifies a registry entry of the given $shortcode
+
+AUTHOR: Kevin Morgan
+
+DATE OF LAST UPDATE: A Long Time Ago
+
+NOTES: Not used. Implemented for future use in Auto mode. Log scans by using
+	   shortcodes like MWB, ESET, etc. Value should be numerical
+#ce -----------------------------------------------------------------------------
+Func _writeregstats($shortcode, $value)
+	RegWrite("HKLM\SOFTWARE\ResTech\AutoStats", $shortcode, "REG_SZ", $value)
+EndFunc   ;==>_writeregstats
+#cs -----------------------------------------------------------------------------
+FUNCTION: _readregstats()
+
+PURPOSE: Gets the data from a registry entry of the given shortcode
+
+AUTHOR: Kevin Morgan
+
+DATE OF LAST UPDATE: A Long Time Ago
+
+NOTES: Not used. Implemented for future use in Auto mode. Read scan data by
+	   using shortcodes like MWB, ESET, etc. Will fail if no key or data bad.
+#ce -----------------------------------------------------------------------------
+Func _readregstats($shortcode)
+	SetError(0)
+	$value = RegRead("HKLM\SOFTWARE\ResTech\AutoStats", $shortcode)
+	If @error = 0 Then
+		Return Number($value)
+	Else
+		Return -1
+	EndIf
+EndFunc   ;==>_readregstats
+#EndRegion ###AutoHelpers
 #Region ###Helpers
+#cs ---------------------------------------------------------------------------
+FUNCTION: _start()
+
+PURPOSE: Handle GUI updates and log entries to start a function
+
+AUTHOR: Kevin Morgan
+
+DATE OF LAST UPDATE: 12/11/14
+
+NOTES:
+#ce -----------------------------------------------------------------------------
+Func _start($program)
+	_appendlog(1, $program)
+	GUICtrlSetData($proglabel, $program & " Running")
+	GUICtrlSetStyle($progbar, 8)
+	GUICtrlSendMsg($progbar, $pbm_setmarquee, True, 20)
+EndFunc
+#cs ---------------------------------------------------------------------------
+FUNCTION: _end()
+
+PURPOSE: Handle GUI updates and log entries to finish a function
+
+AUTHOR: Kevin Morgan
+
+DATE OF LAST UPDATE: 12/11/14
+
+NOTES:
+#ce -----------------------------------------------------------------------------
+Func _end($program)
+	_appendlog(4, $program)
+	GUICtrlSetStyle($progbar, 1)
+	GUICtrlSetData($progbar, 0)
+	GUICtrlSetData($proglabel, "ResTool Ready...")
+EndFunc
 #cs ---------------------------------------------------------------------------
 FUNCTION: _close()
 
@@ -330,39 +554,6 @@ Func _appendlog($code, $prog, $msg = "")
 	FileWriteLine($logfile, $logentry)
 	FileClose($logfile)
 EndFunc   ;==>_appendlog
-
-#cs -----------------------------------------------------------------------------
-FUNCTION: _writeregstats()
-
-PURPOSE: Creates and or modifies a registry entry of the given $shortcode
-
-AUTHOR: Kevin Morgan
-
-DATE OF LAST UPDATE: A Long Time Ago
-
-NOTES: Not used. Implemented for future use in Auto mode. Log scans by using
-	   shortcodes like MWB, ESET, etc. Value should be numerical
-#ce -----------------------------------------------------------------------------
-Func _writeregstats($shortcode, $value)
-	RegWrite("HKLM\SOFTWARE\ResTech\AutoStats", $shortcode, "REG_SZ", $value)
-EndFunc   ;==>_writeregstats
-
-#cs -----------------------------------------------------------------------------
-FUNCTION: _readregstats()
-
-PURPOSE: Gets the data from a registry entry of the given shortcode
-
-AUTHOR: Kevin Morgan
-
-DATE OF LAST UPDATE: A Long Time Ago
-
-NOTES: Not used. Implemented for future use in Auto mode. Read scan data by
-	   using shortcodes like MWB, ESET, etc. Will fail if no key or data bad.
-#ce -----------------------------------------------------------------------------
-Func _readregstats($shortcode)
-	Return Number(RegRead("HKLM\SOFTWARE\ResTech\AutoStats", $shortcode))
-EndFunc   ;==>_readregstats
-
 #cs -----------------------------------------------------------------------------
 FUNCTION: _winwaitnotify()
 
@@ -424,6 +615,112 @@ Func _waitclick($title, $text, $control, $timeout = 0)
 EndFunc   ;==>_waitclick
 
 #EndRegion ###Helpers
+#Region ###AutoScanners
+#cs -----------------------------------------------------------------------------
+FUNCTION: _autocf()
+
+PURPOSE: Runs ComboFix for Auto Mode
+
+AUTHOR: Kevin Morgan
+
+DATE OF LAST UPDATE: 12/11/14
+
+NOTES: Can't currently handle the log.
+#ce -----------------------------------------------------------------------------
+Func _autocf()
+EndFunc
+#cs -----------------------------------------------------------------------------
+FUNCTION: _automwb()
+
+PURPOSE: Runs Malwarebytes for Auto Mode
+
+AUTHOR: Kevin Morgan
+
+DATE OF LAST UPDATE: 12/11/14
+
+NOTES: Can't currently handle the log.
+#ce -----------------------------------------------------------------------------
+Func _automwb()
+EndFunc
+#cs -----------------------------------------------------------------------------
+FUNCTION: _autoeset()
+
+PURPOSE: Runs Eset for Auto Mode
+
+AUTHOR: Kevin Morgan
+
+DATE OF LAST UPDATE: 12/11/14
+
+NOTES: Can't currently handle the log.
+#ce -----------------------------------------------------------------------------
+Func _autoeset()
+EndFunc
+#cs -----------------------------------------------------------------------------
+FUNCTION: _autosb()
+
+PURPOSE: Runs SpyBot for Auto Mode
+
+AUTHOR: Kevin Morgan
+
+DATE OF LAST UPDATE: 12/11/14
+
+NOTES: Can't currently handle the log.
+#ce -----------------------------------------------------------------------------
+Func _autosb()
+EndFunc
+#cs -----------------------------------------------------------------------------
+FUNCTION: _autosas()
+
+PURPOSE: Runs SuperAntiSpyware for Auto Mode
+
+AUTHOR: Kevin Morgan
+
+DATE OF LAST UPDATE: 12/11/14
+
+NOTES: Can't currently handle the log.
+#ce -----------------------------------------------------------------------------
+Func _autosas()
+EndFunc
+#cs -----------------------------------------------------------------------------
+FUNCTION: _autohc()
+
+PURPOSE: Runs HouseCall for Auto Mode
+
+AUTHOR: Kevin Morgan
+
+DATE OF LAST UPDATE: 12/11/14
+
+NOTES: Can't currently handle the log.
+#ce -----------------------------------------------------------------------------
+Func _autohc()
+EndFunc
+#cs -----------------------------------------------------------------------------
+FUNCTION: _autocc()
+
+PURPOSE: Runs CCleaner for Auto Mode
+
+AUTHOR: Kevin Morgan
+
+DATE OF LAST UPDATE: 12/11/14
+
+NOTES: Can't currently handle the log.
+#ce -----------------------------------------------------------------------------
+Func _autocc()
+EndFunc
+#cs -----------------------------------------------------------------------------
+FUNCTION: _autosfc()
+
+PURPOSE: Runs System File Check for Auto Mode
+
+AUTHOR: Kevin Morgan
+
+DATE OF LAST UPDATE: 12/11/14
+
+NOTES: Can't currently handle the log.
+#ce -----------------------------------------------------------------------------
+Func _autosfc()
+EndFunc
+#EndRegion ###AutoScanners
 #Region ###Scanners
 #cs -----------------------------------------------------------------------------
 FUNCTION: _runcf()
@@ -432,25 +729,26 @@ PURPOSE: Runs ComboFix like a boss
 
 AUTHOR: Kevin Morgan
 
-DATE OF LAST UPDATE: Back in the day
+DATE OF LAST UPDATE: 12/11/14
 
 NOTES: Can't currently handle the log.
 #ce -----------------------------------------------------------------------------
 Func _runcf()
-	Local $updated = 0
 	_appendlog(1, "ComboFix")
 	GUICtrlSetData($proglabel, "ComboFix Running")
 	GUICtrlSetStyle($progbar, 8)
 	GUICtrlSendMsg($progbar, $pbm_setmarquee, True, 20)
+	;run CF
 	Run(@ScriptDir & "/Script/Scanners/CF/CF.exe")
+	;Handle startup disclaimers
 	While (Not WinExists("ComboFix"))
 		If (WinExists("ComboFix: Disclaimer")) Then
 			WinActivate("ComboFix: Disclaimer")
 			Send("{ENTER}")
-			$updated = 1
 		EndIf
-		Sleep(100)
+		Sleep(1000)
 	WEnd
+	;Handle update Dialogs
 	While (WinExists("ComboFix"))
 		If (WinExists("ComboFix", "Yes")) Then
 			Sleep(100)
@@ -458,21 +756,57 @@ Func _runcf()
 		EndIf
 		Sleep(100)
 	WEnd
-	If ($updated = 1) Then
-		_runcf()
-	Else
-		While (Not WinExists("Administrator:  ."))
-			Sleep(100)
-			If (WinExists("Warning !!")) Then
-				WinActivate("Warning !!")
-				Send("{ENTER}")
+	;there may be an agree somewhere in here that is unhandled?
+	;Handle AV Warnings;
+	While (Not WinExists("Administrator:  ."))
+		Sleep(100)
+		If (WinExists("Warning !!")) Then
+			WinActivate("Warning !!")
+			Send("{ENTER}")
+		EndIf
+	WEnd
+	;wait for autoit to close, handle repeated open/close of conhost
+	While(True)
+		If(ProcessExists("conhost.exe")) Then
+			ProcessWaitClose("conhost.exe")
+		Else
+			Sleep(1000)
+			If Not(ProcessExists("conhost.exe")) Then
+				ExitLoop
 			EndIf
+		EndIf
+	WEnd
+	;parse logfile
+
+	;open file
+	Dim $cflog = FileOpen("C:\COMBOFIX.TXT")
+	;advance to the Other Deletions portion of the scan
+	If(Not ($cflog = -1)) Then
+		Dim $str = FileReadLine($cflog)
+		While (StringInStr($str, "Other Deletions") = 0 And Not (@error = -1))
+			$str = FileReadLine($cflog)
 		WEnd
-		While (WinExists("Administrator:  ."))
-			Sleep(100)
-		WEnd
-		_appendlog(4, "ComboFix")
+		;count entries between Other Deletions and files created
+		Dim $count = 0
+		If Not(@error = -1) Then
+			$str = FileReadLine($cflog)
+			While (StringInStr($str, "(((((((((((") = 0 And Not (@error = -1))
+				$str = FileReadLine($cflog)
+				If (Not(StringLeft($str, 1) = ".") And Not(StringLeft($str, 1) = "(")) Then
+					$count += 1
+				EndIf
+			WEnd
+		EndIf
+		MsgBox(0, "ComboFix Log Results", "ComboFix made " & $count & " deletion(s).")
+		_appendLog(3, "ComboFix", $count & " deletion(s).")
+	Else
+		MsgBox(0, "ComboFix Log Error", "Unable to open ComboFix log file.")
+		_appendLog(2, "ComboFix", "Log file not found")
 	EndIf
+	If ProcessExists("notepad.exe") Then
+		ProcessClose("notepad.exe")
+	EndIf
+	_appendlog(4, "ComboFix")
 	GUICtrlSetStyle($progbar, 1)
 	GUICtrlSetData($progbar, 0)
 	GUICtrlSetData($proglabel, "ResTool Ready...")
