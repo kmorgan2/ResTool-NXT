@@ -1014,7 +1014,7 @@ Func _runmwb()
 
 		;if error, log it and try to fix it
 		If (WinActive("Malwarebytes Anti-Malware", "An error has occurred")) Then
-			_appendlog(3, "Malwarebytes", "Failed to Update")t
+			_appendlog(3, "Malwarebytes", "Failed to Update")
 			;if user doesn't wish to continue, tie up loose ends
 			If ($idno == MsgBox($mb_yesno, "ResFail: Net Connection", "The computer is not connected to the proxy and could not update. Continue with MWB scan?")) Then
 				Send("{ENTER}")
@@ -1380,6 +1380,7 @@ EndFunc   ;==>_runhc
 #ce -----------------------------------------------------------------------------
 Func _runcc()
 	_start("CCleaner")
+	;install CCleaner if necessary
 	If (Not FileExists(@ProgramFilesDir & "\CCleaner\CCleaner.exe")) Then
 		Run(@ScriptDir & "\Script\CC.exe")
 		WinWait("CCleaner Professional Setup", "Welcome")
@@ -1395,6 +1396,7 @@ Func _runcc()
 		ControlClick("CCleaner Professional Setup", "", 1)
 		WinWait("CCleaner Professional", "")
 		WinClose("CCleaner Professional")
+	;otherwise run the correct architecture
 	Else
 		If ($osv = "X86") Then
 			Run(@ProgramFilesDir & "\CCleaner\CCleaner.exe")
@@ -1402,6 +1404,7 @@ Func _runcc()
 			Run(@ProgramFilesDir & "\CCleaner\CCleaner64.exe")
 		EndIf
 	EndIf
+	;perform file cleanup
 	WinWait("CCleaner Professional", "")
 	WinClose("CCleaner Professional")
 	WinWait("Piriform CCleaner - Professional Edition", "")
@@ -1409,45 +1412,61 @@ Func _runcc()
 	WinWait("", "This process will ")
 	Send("{ENTER}")
 	WinWait("Piriform CCleaner - Professional Edition", "CLEANING")
+
+	;Results are located on the 9th line of text grabbed from the window
 	$results = StringSplit(WinGetText("Piriform CCleaner - Professional Edition"), @LF, 1)[8]
+
 	MsgBox(0, "", $results)
-	_appendlog(4, "CCleaner File Cleaner", $results)
-	Send("G")
+	_appendlog(4, "CCleaner File Cleaner", $results) ; mark these results in the log
+	Send("g");switches to registry (on a good day)
 	Local $rresults = 1
 	$title = "Piriform CCleaner - Professional Edition"
 	$text = "Scan for Issues"
+	;While we haven't gotten a 0 entry scan, run a scan
 	While (Not $rresults = 0)
 		WinWait($title, $text)
 		WinActivate($title, $text)
 		ControlClick($title, $text, "Button2")
 		Sleep(100)
+		;wait for scan to complete
 		While (Not ControlGetText($title, $text, "Button2") = "&Scan for Issues")
 			Sleep(100)
 		WEnd
+		;if Fix Results is enabled, we will do that
 		If ControlCommand($title, $text, "Button3", "IsEnabled") Then
 			ControlClick($title, $text, "Button3")
 			WinWait("CCleaner", "")
 			ControlClick("CCleaner", "", 6)
+
+			;save the file in default location (usually My Docs)
 			WinWait("Save As", "")
 			Sleep(1000)
-			Local $ccrfile = StringSplit(WinGetText("Save As"), @LF)[5]
 			Send("{ENTER}")
+
+			;start fixing issues
 			$text = "Fix All Selected Issues"
 			WinWait("", $text)
 			Sleep(100)
 			$rresults = 0
+			;For each entry, click the Fix button and add a count to rresults
 			While (ControlCommand("", $text, "Button3", "IsEnabled"))
 				ControlClick("", $text, "Button3")
 				$rresults += 1
 				Sleep(10)
 			WEnd
+			;close the dialog once all entries fixed
 			ControlClick("", $text, "Button5")
+			;return result to user
 			MsgBox(0, "", $rresults & " Registry Entries")
+		;Fix Results not enabled, no errors to fix
 		Else
+			;set value to 0 and return to user
 			MsgBox(0, "", "0 Registry Entries")
 			$rresults = 0
 		EndIf
+		;reset text back to what it was at the start of the loop.
 		$text = "Scan for Issues"
+		;log things
 		_appendlog(4, "CCleaner Registry Cleaner", $rresults & " Entries")
 	WEnd
 	_end("CCleaner")
@@ -1465,7 +1484,10 @@ EndFunc   ;==>_runcc
 #ce -----------------------------------------------------------------------------
 Func _runmwbar()
 	_start("Malwarebytes Anti Rootkit")
+	;run the executable
 	Run(@ScriptDir & "\Script\Scanners\MWBAR.exe")
+	;I honesstly have no clue what I did here, but it works in most cases
+	;It's mostly boring window-handling stuff, but if someone wants to document it...
 	WinWait("Malwarebytes Anti-Rootkit", "")
 	ControlClick("Malwarebytes Anti-Rootkit", "", "Button2")
 	WinWait("Malwarebytes Anti-Rootkit BETA v1.08.2.1001", "")
@@ -1476,6 +1498,8 @@ Func _runmwbar()
 	Send("{TAB}{TAB}{TAB}{ENTER}")
 	MsgBox($MB_TOPMOST, "Wait for scan to complete", "Close this message box when MWBAR is finished scanning completely.")
 	Send("!n")
+	;there was ABSOLUTELY NO WAY to get the results from the window, and MWBAR is stupid about logfiles.
+	;I'm sure there is a way, but we don't use it enough for it to necessitate the time to find one.
 	MsgBox($MB_TOPMOST, "View Results", "Results should be showing. Record them and then close this dialog")
 	MsgBox($MB_TOPMOST, "Confirm Close", "Don't close this until you've actually recorded the results!")
 	Send("!e")
@@ -1494,14 +1518,20 @@ EndFunc   ;==>_runmwbar
 #ce -----------------------------------------------------------------------------
 Func _runtdss()
 	_start("TDSSKiller")
+	;make some variables that we will use later.
 	Local $aTDSSLog
 	Dim $suscount = 0, $infcount = 0
-	ShellExecute(@ScriptDir & "\Script\Scanners\TDSS.exe", "-silent -l C:\TDSSAI.txt -accepteula -accepteulaksn")
+	;open the executable with some flags to expedite the process (no windows!)
+	ShellExecuteWait(@ScriptDir & "\Script\Scanners\TDSS.exe", "-silent -l C:\TDSSAI.txt -accepteula -accepteulaksn")
+	;if we've got a log as expected
 	If FileExists("C:\TDSSAI.txt") Then
+		;if we can't read it, log failure
 		If Not _FileReadToArray("C:\TDSSAI.txt", $aTDSSLog) Then
 			MsgBox(16, "Error", "Error parsing results")
 			_appendlog(2, "TDSSKiller", "Error parsing results")
+		;else parse it
 		Else
+			;for every Suspicious or Infected file, add a counter respectively
 			For $i = 1 To UBound($aTDSSLog) - 1
 				If StringInStr($aTDSSLog[$i], "Suspicious") Then
 					$suscount += 1
@@ -1509,6 +1539,7 @@ Func _runtdss()
 					$infcount += 1
 				EndIf
 			Next
+			;return these results nicely and log them
 			MsgBox(0, "Results", $suscount & " suspicious files, and " & $infcount & " infected files.")
 			_appendlog(3, "TDSSKiller", $suscount & " suspicious / " & $infcount & " infected")
 		EndIf
@@ -1530,6 +1561,7 @@ EndFunc   ;==>_runtdss
 #ce -----------------------------------------------------------------------------
 Func _rmnac()
 	_start("NAC Uninstall")
+	;Clicks buttons in the uninstaller. Pretty straightforward.
 	ShellExecute("C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Cisco\Cisco NAC Agent\Uninstall Cisco NAC Agent.lnk")
 	WinWait("Windows Installer", "")
 	ControlClick("Windows Installer", "", "Button1")
@@ -1552,6 +1584,7 @@ EndFunc   ;==>_rmnac
 #ce -----------------------------------------------------------------------------
 Func _anyprint()
 	_start("Pharos Install")
+	;Clicks buttons in an installer. Pretty straightforward
 	Run(@ScriptDir & "\Script\Installers\Pharos.exe")
 	WinWait("Package ""Windows AnywherePrint Client"" installer.", "")
 	WinActivate("[LAST]")
@@ -1576,18 +1609,18 @@ EndFunc   ;==>_anyprint
 #ce -----------------------------------------------------------------------------
 Func _tempfr()
 	_start("Disk Cleanup")
+	;run the file removal thing
 	Run(@SystemDir & "\cleanmgr.exe")
+	;select the default selection, hope no one has a weirdly named sys drive
 	WinWait("Disk Cleanup", "")
 	WinWait("Disk Cleanup for  (C:)", "")
 	WinActivate("Disk Cleanup for  (C:)", "")
+	;start the cleanup
 	ControlClick("Disk Cleanup for  (C:)", "", "Button4")
 	WinWait("Disk Cleanup", "Delete Files")
+	;delete the files we don't want
 	ControlClick("Disk Cleanup", "Delete Files", "Button1")
 	ProcessWaitClose("cleanmgr.exe")
-	_appendlog(4, "Disk Cleanup")
-	GUICtrlSetStyle($progbar, 1)
-	GUICtrlSetData($progbar, 0)
-	GUICtrlSetData($proglabel, "ResTool Ready...")
 	_end("Disk Cleanup")
 EndFunc   ;==>_tempfr
 
@@ -1603,6 +1636,8 @@ EndFunc   ;==>_tempfr
 	NOTES: Opens in default browser
 #ce -----------------------------------------------------------------------------
 Func _openticket()
+	;A great example of how awesome ShellExecute is. It literally will open anything
+	;Just like Windows would.
 	ShellExecute("http://intranet.restech.niu.edu/tickets/" & $ticketno)
 EndFunc   ;==>_openticket
 #cs -----------------------------------------------------------------------------
@@ -1617,6 +1652,7 @@ EndFunc   ;==>_openticket
 	NOTES: Opens the registry associated with program arch. 64 gets 64 reg, 32 to 32
 #ce -----------------------------------------------------------------------------
 Func _regedit()
+	;most complex line of code in the entire program
 	ShellExecute("regedit")
 EndFunc   ;==>_regedit
 #cs -----------------------------------------------------------------------------
@@ -1631,28 +1667,40 @@ EndFunc   ;==>_regedit
 	NOTES:
 #ce -----------------------------------------------------------------------------
 Func _togglemsconfig()
+	;open msconfig
 	Run("msconfig")
+	;wait for it to pop up, then foreground it
 	WinWait("System Configuration", "")
 	WinActivate("System Configuration", "")
 	Sleep(100)
+	;move to next tab with Alt-Tab (at least I think ^ means alt)
 	Send("^{TAB}")
+	;if we're enabling it
 	If (Not (_readregstats("MSCFG") == 1)) Then
+		;click some buttons
 		ControlClick("System Configuration", "", "Button5")
 		Sleep(100)
 		ControlClick("System Configuration", "", "Button9")
 		Sleep(100)
 		ControlClick("System Configuration", "", "Button30")
+		;tell it not to restart, because we do what we want
 		WinWait("System Configuration", "You may need to restart your computer")
 		ControlClick("System Configuration", "", "Button3")
+		;record it in the registry, set the color in the GUI
 		_writeregstats("MSCFG", 1)
 		GUICtrlSetColor($msconfig, $COLOR_RED)
+	;if we're disabling it
 	Else
+		;click some buttons
 		ControlClick("System Configuration", "", "Button5")
+		;update the registry
 		_writeregstats("MSCFG", 0)
 		Sleep(100)
 		ControlClick("System Configuration", "", "Button30")
+		;tell it not to restart, because we do what we want.
 		WinWait("System Configuration", "You may need to restart your computer")
 		ControlClick("System Configuration", "", "Button3")
+		;Eliminate color from the GUI, because nobody gets a happy GUI
 		GUICtrlSetColor($msconfig, $COLOR_BLACK)
 	EndIf
 EndFunc   ;==>_togglemsconfig
