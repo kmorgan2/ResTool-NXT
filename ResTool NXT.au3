@@ -4,8 +4,8 @@
 #AutoIt3Wrapper_Outfile_x64=J:\ResTool NXT_x64.exe
 #AutoIt3Wrapper_Compression=4
 #AutoIt3Wrapper_Compile_Both=y
-#AutoIt3Wrapper_Res_Description=Automation tool for Residential Technology Helpdesk of Northern Illinois University
-#AutoIt3Wrapper_Res_Fileversion=0.1.150115.0
+#AutoIt3Wrapper_Res_Description=ResTool NXT
+#AutoIt3Wrapper_Res_Fileversion=0.1.150130.0
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #Region ###Includes
 #include <GUIConstants.au3>
@@ -23,6 +23,9 @@
 #include <WindowsConstants.au3>
 #include <ColorConstants.au3>
 #include <ITaskBarList.au3>
+#include <String.au3>
+#include <Array.au3>
+#include <Array.au3>
 #EndRegion ###Includes
 #Region ###Program Init and Loop
 
@@ -686,7 +689,7 @@ Func _setticket()
 	Local $newtix = InputBox("Enter Ticket Number", "Please enter the computer's current ticket number:")
 
 	;run validation on string
-	If (Not $newtix = "") Then
+	If (Not Number($newtix) = 0) Then
 
 		;write it to registry and update everything
 		RegWrite("HKLM\SOFTWARE\ResTech", "TicketNo", "REG_SZ", $newtix)
@@ -991,9 +994,9 @@ EndFunc   ;==>_runcf
 
 	AUTHOR: Kevin Morgan
 
-	DATE OF LAST UPDATE: A Long Time Ago
+	DATE OF LAST UPDATE: 1/30/15
 
-	NOTES: Doesn't handle the log, only completes after stuff is removed manually
+	NOTES: Now with logging support!
 #ce -----------------------------------------------------------------------------
 Func _runmwb()
 	_start("Malwarebytes")
@@ -1006,12 +1009,15 @@ Func _runmwb()
 	While (Not ProcessExists("mbam.exe"))
 		Sleep(100)
 	WEnd
-	Sleep(1000)
+	WinWaitActive("Malwarebytes")
+	If (WinActive("Malwarebytes Anti-Malware", "latest version")) Then
+		Sleep(100)
+		Send("{ESC}")
+	EndIf
 	;handle the update dialogs, if present. First select update to latest version
 	If (WinActive("Malwarebytes Anti-Malware", "outdated")) Then
 		Send("{ENTER}")
-		Sleep(20000);wait 20 seconds
-
+		Sleep(5000);wait 20 seconds
 		;if error, log it and try to fix it
 		If (WinActive("Malwarebytes Anti-Malware", "An error has occurred")) Then
 			_appendlog(3, "Malwarebytes", "Failed to Update")
@@ -1037,10 +1043,10 @@ Func _runmwb()
 			WinWait("Malwarebytes Anti-Malware", "database was successfully")
 			Send("{ENTER}")
 		EndIf
+	Sleep(5000)
 	EndIf
 
 	;wait for update completion
-	Sleep(20000)
 
 	;get rid of an occasional 2.x dialog that pops up again
 	If (WinActive("Malwarebytes Anti-Malware", "latest version")) Then
@@ -1058,6 +1064,37 @@ Func _runmwb()
 	While (Not ProcessExists("notepad.exe"))
 		Sleep(100)
 	WEnd
+	If (WinExists("Malwarebytes Anti-Malware", "No malicious items")) Then
+		WinClose("Malwarebytes Anti-Malware", "No malicious items");close dialog
+		;we're clear; log results and exit
+		MsgBox(0, "Malwarebytes", "MWB found 0 infected files.")
+		_appendlog(3, "Malwarebytes", "0 infected files")
+		;exit
+	ElseIf (WinExists("Malwarebytes Anti-Malware", "Show Results")) Then
+		ControlClick("Malwarebytes Anti-Malware", "Show Results", "Button1");close dialog
+		;we've got items. parse log to determine how many
+		Local $wt = WinGetTitle("mbam")
+		Local $fname = @AppDataDir & "\Malwarebytes\Malwarebytes' Anti-Malware\Logs\" & StringLeft($wt, StringLen($wt) - 10)& '.txt'
+		Local $fd = FileOpen($fname)
+		Local $str = FileRead($fd)
+		$str = StringTrimLeft($str, StringInStr($str, "Memory P"))
+		Local $astr = _StringBetween($str, ": ", @CRLF); get an array of # every ': # @CRLF" match
+		Local $result = 0
+		For $i = 0 To UBound($astr) -1; sum all array matches via a loop
+			$result += Int($astr[$i])
+		Next
+		MsgBox(0, "Malwarebytes", "MWB found " & $result & " infected files.")
+		_appendlog(3, "Malwarebytes", $result & " infected files")
+		WinClose("mbam")
+		;Remove all
+		ControlClick("Malwarebytes Anti-Malware", "", "ThunderRT6CommandButton2");show results
+		ControlClick("Malwarebytes Anti-Malware", "", "ThunderRT6UserControlDC1", "right");context menu
+		Sleep (100)
+		Send("c");select check all
+		Sleep (100)
+		Send("{ENTER}");enter
+		ControlClick("Malwarebytes Anti-Malware", "", "ThunderRT6CommandButton2");remove selected
+		EndIf
 	_end("Malwarebytes")
 EndFunc   ;==>_runmwb
 
@@ -1716,7 +1753,7 @@ EndFunc   ;==>_togglemsconfig
 	NOTES: Opens in default browser
 #ce -----------------------------------------------------------------------------
 Func _speedtest()
-	ShellExecute("http://speedtest.niu.edu")
+	ShellExecute("http://speedtest.niu.edu") ;self explanatory
 EndFunc   ;==>_speedtest
 
 #cs ---------------------------------s--------------------------------------------
@@ -1731,7 +1768,7 @@ EndFunc   ;==>_speedtest
 	NOTES:
 #ce -----------------------------------------------------------------------------
 Func _netadapterproperties()
-	ShellExecute("Ncpa.cpl")
+	ShellExecute("Ncpa.cpl") ;Ncpa is cpl module for Network Control Panel (Adapter Settings)
 EndFunc   ;==>_netadapterproperties
 
 #cs -----------------------------------------------------------------------------
@@ -1746,7 +1783,7 @@ EndFunc   ;==>_netadapterproperties
 	NOTES:
 #ce -----------------------------------------------------------------------------
 Func _progfeat()
-	ShellExecute("appwiz.cpl")
+	ShellExecute("appwiz.cpl") ;appwiz is cpl module for Programs and Features
 EndFunc   ;==>_progfeat
 
 #cs -----------------------------------------------------------------------------
@@ -1761,7 +1798,7 @@ EndFunc   ;==>_progfeat
 	NOTES:
 #ce -----------------------------------------------------------------------------
 Func _devmgmt()
-	ShellExecute("devmgmt.msc")
+	ShellExecute("devmgmt.msc") ;devmgmt is MMC module for Device Management
 EndFunc   ;==>_devmgmt
 
 #cs -----------------------------------------------------------------------------
@@ -1777,9 +1814,10 @@ EndFunc   ;==>_devmgmt
 #ce -----------------------------------------------------------------------------
 Func _defraggle()
 	_start("Disk Defragmenter")
-	GUISetState(@SW_SHOW)
+	;Start the defragmenter without a window
 	ShellExecute("defrag", "/C /U", "", "", @SW_HIDE)
 	Sleep(1000)
+	;Wait for defrag to do its thing
 	While (ProcessExists("Defrag.exe"))
 		Sleep(100)
 	WEnd
@@ -1798,27 +1836,33 @@ EndFunc   ;==>_defraggle
 	NOTES:
 #ce -----------------------------------------------------------------------------
 Func _webreset()
+	;all input/output stuff has to be printed explicitly, since it is by stage
 	_appendlog(1, "IPConfig Reset")
 	GUICtrlSetData($proglabel, "Initializing IP Config Reset")
+	;release
 	ShellExecuteWait("ipconfig", "/release", "", "", @SW_HIDE)
 	Sleep(100)
 	GUICtrlSetData($progbar, 33)
 	_ITaskBar_SetProgressValue($form, 33)
 	GUICtrlSetData($proglabel, "Step 1 of 3 Complete")
+	;flushdns
 	ShellExecuteWait("ipconfig", "/flushdns", "", "", @SW_HIDE)
 	Sleep(100)
 	GUICtrlSetData($progbar, 66)
 	_ITaskBar_SetProgressValue($form, 66)
 	GUICtrlSetData($proglabel, "Step 2 of 3 Complete")
+	;renew
 	ShellExecute("ipconfig", "/renew", "", "", @SW_HIDE)
 	Sleep(100)
+	;wait for renew to complete
 	While (ProcessExists("ipconfig.exe"))
 		Sleep(100)
 	WEnd
+	;fix the GUI and log stuff
 	GUICtrlSetData($progbar, 100)
 	_ITaskBar_SetProgressValue($form, 100)
 	GUICtrlSetData($proglabel, "Step 3 of 3 Complete")
-	Sleep(1000)
+	Sleep(1000) ;pause so we see the stuff
 	GUICtrlSetData($progbar, 0)
 	_ITaskBar_SetProgressValue($form, 0)
 	GUICtrlSetData($proglabel, "ResTool Ready...")
@@ -1837,33 +1881,35 @@ EndFunc   ;==>_webreset
 	NOTES:
 #ce -----------------------------------------------------------------------------
 Func _winsock()
+	;handle log and GUI data explicitly
 	_appendlog(1, "Network Services Reset")
-	ShellExecuteWait("netsh", "winsock reset", "", "", @SW_HIDE)
+	ShellExecuteWait("netsh", "winsock reset", "", "", @SW_HIDE) ;winsock reset
 	GUICtrlSetData($proglabel, "Step 1 of 5 Complete")
 	GUICtrlSetData($progbar, 20)
 	_ITaskBar_SetProgressValue($form, 20)
-	ShellExecuteWait("netsh", "winsock reset catalog", "", "", @SW_HIDE)
+	ShellExecuteWait("netsh", "winsock reset catalog", "", "", @SW_HIDE) ;winsock catalog reset
 	GUICtrlSetData($proglabel, "Step 2 of 5 Complete")
 	GUICtrlSetData($progbar, 40)
 	_ITaskBar_SetProgressValue($form, 40)
-	ShellExecuteWait("netsh", "interface ip reset", "", "", @SW_HIDE)
+	ShellExecuteWait("netsh", "int ip reset", "", "", @SW_HIDE) ;ip settings reset
 	GUICtrlSetData($proglabel, "Step 3 of 5 Complete")
 	GUICtrlSetData($progbar, 60)
 	_ITaskBar_SetProgressValue($form, 60)
-	ShellExecuteWait("netsh", "interface reset all", "", "", @SW_HIDE)
+	ShellExecuteWait("netsh", "interface ipv4 reset", "", "", @SW_HIDE) ;network interface reset
 	GUICtrlSetData($proglabel, "Step 4 of 5 Complete")
 	GUICtrlSetData($progbar, 80)
 	_ITaskBar_SetProgressValue($form, 80)
 	Select
 		Case $osv = "WIN_XP"
-			ShellExecuteWait("netsh", "firewall reset", "", "", @SW_HIDE)
+			ShellExecuteWait("netsh", "firewall reset", "", "", @SW_HIDE);reset old firewall if xp
 		Case Else
-			ShellExecuteWait("netsh", "advfirewall reset", "", "", @SW_HIDE)
+			ShellExecuteWait("netsh", "advfirewall reset", "", "", @SW_HIDE);reset firewall if newer
 	EndSelect
+	;finish the GUI updating stuff
 	GUICtrlSetData($proglabel, "Step 5 of 5 Complete")
 	GUICtrlSetData($progbar, 100)
 	_ITaskBar_SetProgressValue($form, 100)
-	Sleep(1000)
+	Sleep(1000);wait so we see the stuff
 	GUICtrlSetData($proglabel, "ResTool Ready...")
 	GUICtrlSetData($progbar, 0)
 	_ITaskBar_SetProgressValue($form, 0)
@@ -1882,11 +1928,14 @@ EndFunc   ;==>_winsock
 	NOTES:
 #ce -----------------------------------------------------------------------------
 Func _hidnetremove()
+	;manual log and progress bar since steps
 	_appendlog(1, "Hidden Network Adapter Removal")
-	Local $devcon = @ScriptDir & "\Script\OOB\64"
+	;determine version of devcon to use
+	Local $devcon = @ScriptDir & "\Script\OOB\64\devcon.exe"
 	If ($osa == "X86") Then
-		$devcon = @ScriptDir & "\Script\OOB\32"
+		$devcon = @ScriptDir & "\Script\OOB\32\devcon.exe"
 	EndIf
+	;remove Teredo Tunneling Pseudo-interface adapters
 	GUICtrlSetData($proglabel, "Hidden Adapter: Step 1 of 4")
 	ShellExecuteWait($devcon, '-r remove "@ROOT\*TEREDO\0000"', $devcon)
 	ShellExecuteWait($devcon, '-r remove "@ROOT\*TEREDO\0001"', $devcon)
@@ -1894,6 +1943,7 @@ Func _hidnetremove()
 	ShellExecuteWait($devcon, '-r remove "@ROOT\*TEREDO\0003"', $devcon)
 	ShellExecuteWait($devcon, '-r remove "@ROOT\*TEREDO\0004"', $devcon)
 	GUICtrlSetData($progbar, 25)
+	;remove ISATAP Pseudo-interface adapters
 	_ITaskBar_SetProgressValue($form, 25)
 	GUICtrlSetData($proglabel, "Hidden Adapter: Step 2 of 4")
 	ShellExecuteWait($devcon, '-r remove "@ROOT\*ISATAP\0000"', $devcon)
@@ -1902,6 +1952,7 @@ Func _hidnetremove()
 	ShellExecuteWait($devcon, '-r remove "@ROOT\*ISATAP\0003"', $devcon)
 	ShellExecuteWait($devcon, '-r remove "@ROOT\*ISATAP\0004"', $devcon)
 	GUICtrlSetData($progbar, 50)
+	;remove direct Tunneling adapters
 	_ITaskBar_SetProgressValue($form, 50)
 	GUICtrlSetData($proglabel, "Hidden Adapter: Step 3 of 4")
 	ShellExecuteWait($devcon, '-r remove "@ROOT\*TUNMP\0000"', $devcon)
@@ -1911,6 +1962,7 @@ Func _hidnetremove()
 	ShellExecuteWait($devcon, '-r remove "@ROOT\*TUNMP\0004"', $devcon)
 	GUICtrlSetData($progbar, 75)
 	_ITaskBar_SetProgressValue($form, 75)
+	;remove 6to4 conversion pseudo-interface adapters
 	GUICtrlSetData($proglabel, "Hidden Adapter: Step 4 of 4")
 	ShellExecuteWait($devcon, '-r remove "@ROOT\*6TO4\0000"', $devcon)
 	ShellExecuteWait($devcon, '-r remove "@ROOT\*6TO4\0001"', $devcon)
@@ -1922,6 +1974,7 @@ Func _hidnetremove()
 	ShellExecuteWait($devcon, '-r remove "@ROOT\*6TO4\0007"', $devcon)
 	ShellExecuteWait($devcon, '-r remove "@ROOT\*6TO4\0008"', $devcon)
 	ShellExecuteWait($devcon, '-r remove "@ROOT\*6TO4\0009"', $devcon)
+	;fix the GUI data
 	GUICtrlSetData($progbar, 100)
 	_ITaskBar_SetProgressValue($form, 100)
 	Sleep(1000)
@@ -1944,16 +1997,20 @@ EndFunc   ;==>_hidnetremove
 #ce -----------------------------------------------------------------------------
 Func _chkdsk()
 	_start("Disk Check")
+	;run and wait for close of chkdsk. Must  be done this way
 	$var = Run(@ComSpec & " /c" & '%systemroot%\system32\chkdsk.exe C: > ' & @ScriptDir & "\Logs\chkdsk.txt", "", @SW_HIDE)
 	ProcessWaitClose($var)
+	;open the checkdisk log, read it and parse for errors
 	$fd = FileOpen(@ScriptDir & "\Logs\chkdsk.txt")
 	$text = FileRead($fd)
 	If (StringInStr($text, "problems") = 0) Then
 		MsgBox(0, "No Errors", "Chkdsk did not find any errors")
 		_appendlog(4, "Disk Check")
 	Else
+		;if errors, tell the drive it needs to be checked and ask about reboot
 		If (MsgBox($mb_yesno, "Errors Found", "Should I schedule a repair at next boot?") == $idyes) Then
 			ShellExecuteWait("fsutil", "dirty set c:")
+			;if user wants to reboot, do it. Otherwise don't; Repair happens at next restart
 			If (MsgBox($mb_yesno, "Chkdsk queued", "Chkdsk is scheduled to repair the hard drive at next boot. Would you like to restart now?") == $idyes) Then
 				_queuestartup()
 				_appendlog(3, "Disk Check", "Errors Found, Restarting to fix.")
@@ -1986,9 +2043,12 @@ EndFunc   ;==>_chkdsk
 #ce -----------------------------------------------------------------------------
 Func _sfc()
 	_start("System File Check")
+	;build our output handler for SFC data
 	$var = Run(@ComSpec & " /C sfc /scannow", "", @SW_HIDE, $STDOUT_CHILD)
 	ProcessWaitClose($var)
 	$text = StdoutRead($var)
+	;Parse the data for most-to-least unique information:
+	;Failure to run/Success/Failure/Repair/None of the above
 	If Not (StringInStr($text, "pending") = 0) Then
 		MsgBox(0, "SFC Failed", "SFC repairs or Windows Updates required to continue.")
 		_appendlog(2, "System File Check", "Failed due to pending updates")
@@ -2024,15 +2084,19 @@ EndFunc   ;==>_sfc
 	NOTES: Not sure if I actually have the xml bundled with ResTool
 #ce -----------------------------------------------------------------------------
 Func _wifiprofileadd()
+	;requires manual GUI control
 	_appendlog(1, "NIUwireless Profile Import")
+	;remove NIUWireless
 	ShellExecuteWait("netsh", "wlan delete profile name=NIUwireless", "", "", @SW_HIDE)
 	GUICtrlSetData($progbar, 33)
 	_ITaskBar_SetProgressValue($form, 33)
 	GUICtrlSetData($proglabel, "Removed old NIUwireless profile")
+	;remove NIUWirelessInstructions
 	ShellExecuteWait("netsh", "wlan delete profile name=NIUwirelessInstructions", "", "", @SW_HIDE)
 	GUICtrlSetData($progbar, 66)
 	_ITaskBar_SetProgressValue($form, 66)
 	GUICtrlSetData($proglabel, "Removed NIUwirelessInstructions")
+	;add profile from XML
 	ShellExecuteWait("netsh", "wlan add profile filename=" & @ScriptDir & "\Script\WiFi.xml user=all", "", "", @SW_HIDE)
 	GUICtrlSetData($progbar, 100)
 	_ITaskBar_SetProgressValue($form, 100)
@@ -2060,7 +2124,7 @@ EndFunc   ;==>_wifiprofileadd
 #ce -----------------------------------------------------------------------------
 Func _opencontrolpanel()
 	GUICtrlSetData($proglabel, "Opening Control Panel")
-	ShellExecuteWait("control", "", "")
+	ShellExecuteWait("control", "", "");runs Control Panel
 	GUICtrlSetData($progbar, 0)
 	GUICtrlSetData($proglabel, "ResTool Ready...")
 EndFunc   ;==>_opencontrolpanel
@@ -2077,9 +2141,11 @@ EndFunc   ;==>_opencontrolpanel
 #ce -----------------------------------------------------------------------------
 Func _dism()
 	_start("DISM")
+	;run DISM in hidden window - wait for completion
 	ShellExecuteWait("dism", "/Online /Cleanup-Image /RestoreHealth", "", "", @SW_HIDE)
 	GUICtrlSetStyle($progbar, 1)
 	GUICtrlSetData($progbar, 0)
+	;Catch errors and stuff: Failed, Fixed, No Error
 	If (StringInStr(FileRead(@WindowsDir & "\Logs\dism\dism.log"), "Failed to restore the image health", 1)) Then
 		_appendlog(2, "DISM", "DISM failed to reapair system file corruption.")
 		MsgBox($mb_iconwarning, "DISM", "DISM failed to restore the image health.")
@@ -2102,7 +2168,7 @@ EndFunc   ;==>_dism
 #ce -----------------------------------------------------------------------------
 Func _runaio()
 	_start("All In One")
-	;if not installed
+	;if not installed, install. Pretty Standard install
 	If Not (FileExists($32progfiledir & "\Tweaking.com\Windows Repair (All in One)\Repair_Windows.exe")) Then
 		Run(@ScriptDir & "\Script\AIO.exe")
 		WinWait("Tweaking.com - Windows Repair (All in One) Setup", "")
@@ -2119,6 +2185,7 @@ Func _runaio()
 		Sleep(100)
 		Send("!f")
 	EndIf
+	;run it in silent mode. It should do everything by itself, unless it decides that it doesn't like something
 	ShellExecuteWait($32progfiledir & "\Tweaking.com\Windows Repair (All in One)\Repair_Windows.exe", "/silent")
 	_end("All In One")
 EndFunc   ;==>_runaio
@@ -2135,28 +2202,30 @@ EndFunc   ;==>_runaio
 #ce -----------------------------------------------------------------------------
 Func _getmse()
 	_start("MSE Install")
+	;if MSE shouldn't be installed by default, run an install
 	If (Not ($osv = "WIN_81") And Not ($osv = "WIN_8")) Then
 		If ($osa == "X86") Then
 			Run(@ScriptDir & "\Script\Installers\MSE32.exe")
 		Else
 			Run(@ScriptDir & "\Script\Installers\MSE64.exe")
 		EndIf
-		WinWait("Microsoft Security Essentials", "")
+		WinWait("Microsoft Security Essentials", "");first window
 		ControlClick("Microsoft Security Essentials", "", "Button1")
-		WinWait("Microsoft Security Essentials", "accept")
+		WinWait("Microsoft Security Essentials", "accept");EULA
 		ControlClick("Microsoft Security Essentials", "", "Button1")
-		WinWait("Microsoft Security Essentials", "join the program")
-		ControlClick("Microsoft Security Essentials", "", "Button2")
+		WinWait("Microsoft Security Essentials", "join the program");Customer Improvement Program
+		ControlClick("Microsoft Security Essentials", "", "Button2");checkbutton
 		Sleep(100)
-		ControlClick("Microsoft Security Essentials", "", "Button4")
-		WinWait("Microsoft Security Essentials", "optimize")
+		ControlClick("Microsoft Security Essentials", "", "Button4");next
+		WinWait("Microsoft Security Essentials", "optimize");update
 		ControlClick("Microsoft Security Essentials", "", "Button2")
-		WinWait("Microsoft Security Essentials", "may conflict with")
+		WinWait("Microsoft Security Essentials", "may conflict with");AV warning
 		ControlClick("Microsoft Security Essentials", "", "Button1")
-		WinWait("Microsoft Security Essentials", "Finish")
+		WinWait("Microsoft Security Essentials", "Finish");Finish
 		ControlClick("Microsoft Security Essentials", "", "Button1")
 	Else
-		;Need to enable because Win 8.
+		;Need to enable because Win 8. Not implemented
+		MsgBox(0, "Windows 8/8.1", "MSE already installed as Windows Defender. Please enable from Control Panel.")
 	EndIf
 	_end("MSE Install")
 EndFunc   ;==>_getmse
