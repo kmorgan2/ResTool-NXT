@@ -4,7 +4,7 @@
 #AutoIt3Wrapper_Compression=4
 #AutoIt3Wrapper_Compile_Both=y
 #AutoIt3Wrapper_Res_Description=ResTool NXT
-#AutoIt3Wrapper_Res_Fileversion=0.1.150130.0
+#AutoIt3Wrapper_Res_Fileversion=0.1.150206.0
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #Region ###Includes
 #include <GUIConstants.au3>
@@ -23,7 +23,6 @@
 #include <ColorConstants.au3>
 #include <ITaskBarList.au3>
 #include <String.au3>
-#include <Array.au3>
 #include <Array.au3>
 #EndRegion ###Includes
 #Region ###Program Init and Loop
@@ -128,7 +127,7 @@ EndIf
 ;update or define the ticket number if necessary
 If (Not $ticketno = "") Then
 	If (_DateDiff("D", RegRead("HKLM\SOFTWARE\ResTech", "LastOpen"), _NowCalc()) >= 7) Then
-		If ($idno = MsgBox($mb_yesno, "Ticket Number Found", "This computer has a ticket number recorded already. Is the current ticket for this computer still TT" & $ticketno & "?")) Then
+		If ($idno = MsgBox($mb_yesno, "ResTool NXT: Ticket Number", "This computer has a ticket number recorded already. Is the current ticket for this computer still TT" & $ticketno & "?")) Then
 			_setticket()
 		Else
 			_updatelastopen()
@@ -597,8 +596,17 @@ Func _end($program)
 	GUICtrlSetStyle($progbar, 1)
 	GUICtrlSetData($progbar, 0)
 	GUICtrlSetData($proglabel, "ResTool Ready...")
+	_ITaskBar_SetProgressValue($form, 0)
 	_ITaskBar_SetProgressState($form, 0)
 EndFunc   ;==>_end
+Func _error()
+	_ITaskBar_SetProgressState($form, 4)
+	_ITaskBar_SetProgressValue($form, 100)
+EndFunc
+
+Func _unerror()
+	_ITaskBar_SetProgressState($form, 1)
+EndFunc
 #cs ---------------------------------------------------------------------------
 	FUNCTION: _close()
 
@@ -696,7 +704,7 @@ Func _setticket()
 		$ticketno = $newtix
 	Else
 		;pester the user until they enter a good ticket
-		MsgBox(48, "Invalid Ticket", "You entered an invalid ticket number or did not enter a number at all. Please try again.")
+		MsgBox(48, "ResTool NXT: Ticket Number", "You entered an invalid ticket number or did not enter a number at all. Please try again.")
 		_setticket()
 	EndIf
 EndFunc   ;==>_setticket
@@ -775,7 +783,7 @@ Func _appendlog($code, $prog, $msg = "")
 	Else
 
 		;tell the user that everything is broken
-		MsgBox(0, "Logfile Error", "Error opening logfile. You should probably restart ResTool.")
+		MsgBox(0, "ResTool NXT: Logfile", "Error opening logfile. You should probably restart ResTool.")
 	EndIf
 EndFunc   ;==>_appendlog
 #cs -----------------------------------------------------------------------------
@@ -974,10 +982,10 @@ Func _runcf()
 				EndIf
 			WEnd
 		EndIf
-		MsgBox(0, "ComboFix Log Results", "ComboFix made " & $count & " deletion(s).")
+		MsgBox(0, "ResTool NXT: ComboFix", "ComboFix made " & $count & " deletion(s).")
 		_appendlog(3, "ComboFix", $count & " deletion(s).")
 	Else
-		MsgBox(0, "ComboFix Log Error", "Unable to open ComboFix log file.")
+		MsgBox(0, "ResTool NXT: ComboFix", "Unable to open ComboFix log file.")
 		_appendlog(2, "ComboFix", "Log file not found")
 	EndIf
 	If ProcessExists("notepad.exe") Then
@@ -1019,9 +1027,10 @@ Func _runmwb()
 		Sleep(5000);wait 20 seconds
 		;if error, log it and try to fix it
 		If (WinActive("Malwarebytes Anti-Malware", "An error has occurred")) Then
+			_error()
 			_appendlog(3, "Malwarebytes", "Failed to Update")
 			;if user doesn't wish to continue, tie up loose ends
-			If ($idno == MsgBox($mb_yesno, "ResFail: Net Connection", "The computer is not connected to the proxy and could not update. Continue with MWB scan?")) Then
+			If ($idno == MsgBox($mb_yesno, "ResTool NXT: Malwarebytes", "The computer is not connected to the proxy and could not update. Continue with MWB scan?")) Then
 				Send("{ENTER}")
 				Sleep(1000)
 				Send("!{F4}")
@@ -1030,7 +1039,7 @@ Func _runmwb()
 			Else
 				Send("{ENTER}")
 			EndIf
-
+			_unerror()
 		;if no error, get rid of the update to 2.x dialog and start the real update
 		ElseIf (WinActive("Malwarebytes Anti-Malware", "latest version")) Then
 			ControlClick("Malwarebytes Anti-Malware", "", 2)
@@ -1066,7 +1075,7 @@ Func _runmwb()
 	If (WinExists("Malwarebytes Anti-Malware", "No malicious items")) Then
 		WinClose("Malwarebytes Anti-Malware", "No malicious items");close dialog
 		;we're clear; log results and exit
-		MsgBox(0, "Malwarebytes", "MWB found 0 infected files.")
+		MsgBox(0, "ResTool NXT: Malwarebytes", "MWB found 0 infected files.")
 		_appendlog(3, "Malwarebytes", "0 infected files")
 		;exit
 	ElseIf (WinExists("Malwarebytes Anti-Malware", "Show Results")) Then
@@ -1082,7 +1091,7 @@ Func _runmwb()
 		For $i = 0 To UBound($astr) -1; sum all array matches via a loop
 			$result += Int($astr[$i])
 		Next
-		MsgBox(0, "Malwarebytes", "MWB found " & $result & " infected files.")
+		MsgBox(0, "ResTool NXT: Malwarebytes", "MWB found " & $result & " infected files.")
 		_appendlog(3, "Malwarebytes", $result & " infected files")
 		WinClose("mbam")
 		;Remove all
@@ -1140,7 +1149,7 @@ Func _installmwb()
 
 	;we've got a restart on our hands.
 	If WinExists("Setup - Malwarebytes Anti-Malware", "Preparing") Then
-		MsgBox(48, "Restart Required", "The computer is going to restart in order to complete a previous Malwarebytes install action.")
+		MsgBox(48, "ResTool NXT: Malwarebytes", "The computer is going to restart in order to complete a previous Malwarebytes install action.")
 		Sleep(10000)
 		_queuestartup() ;make ResTool start next boot.
 		_appendlog(5, "Malwarebytes", "Requires restart to install")
@@ -1182,12 +1191,27 @@ Func _runeset()
 	;someone forgot to feed the computer its internets
 	If WinExists("Downloading ESET Online Scanner...", "Use custom proxy settings") Then
 		If (_GetIP() = -1) Then
-			While (_GetIP() = -1)
-				;pester the user until we've got a valid PUBLIC ip (good way to verify Inet cnxn)
-				If (MsgBox(5, "Updating...", "Please plug in the Proxy") == 1) Then
+			_error()
+			;pester the user until we've got a valid PUBLIC ip (good way to verify Net Connection)
+			If $IDRETRY = MsgBox($MB_RETRYCANCEL, "ResTool NXT:  ESET Online Scanner", "Please connect the computer to the internet to continue") Then
+				Sleep (1000)
+				If (@IPAddress1 = "127.0.0.1") Then
+					WinClose("Downloading ESET Online Scanner...")
+					MsgBox(0, "ResTool NXT: ESET Online Scanner", "ESET scan aborted due to no network connection.")
+					_appendlog(2, "ESET Online Scanner", "No Internet connection. Scan aborted.")
+					_end ("ESET Online Scanner")
+					Return 0
+				Else
 					ControlClick("Downloading ESET Online Scanner...", "", 109)
+					_unerror()
 				EndIf
-			WEnd
+			Else
+				WinClose("Downloading ESET Online Scanner...")
+				MsgBox(0, "ResTool NXT: ESET Online Scanner", "ESET scan aborted due to no network connection.")
+				_appendlog(2, "ESET Online Scanner", "No Internet connection. Scan aborted.")
+				_end ("ESET Online Scanner")
+				Return 0
+			EndIf
 		Else
 			;try again if valid ip (not sure if this is the best option)
 			ControlClick("Downloading ESET Online Scanner...", "", 109)
@@ -1206,7 +1230,7 @@ Func _runeset()
 	$results = StringSplit(WinGetText("ESET Online Scanner"), @LF, 1)[8]
 	;finish eset
 	ControlClick("ESET Online Scanner", "", 220)
-	MsgBox(0, "ESET Results", "ESET found " & $results & " Infected Files.")
+	MsgBox(0, "ResTool NXT: ESET Online Scanner", "ESET found " & $results & " Infected Files.")
 	_appendlog(4, "ESET Online Scanner", $results & " Infected Files.")
 	WinClose($esethWnd)
 	_end("ESET Online Scanner")
@@ -1219,9 +1243,9 @@ EndFunc   ;==>_runeset
 
 	AUTHOR: Kevin Morgan
 
-	DATE OF LAST UPDATE: A Long Time Ago
+	DATE OF LAST UPDATE: 2/5/15
 
-	NOTES: Hangs in a lot of places, really need to optimize.
+	NOTES: Not fully tested. Think the results might not work
 #ce -----------------------------------------------------------------------------
 Func _runsb()
 	;if not installed, make it so (the install is pretty self explanatory)
@@ -1245,7 +1269,9 @@ Func _runsb()
 		WinClose("Update (Spybot")
 	Else
 		WinClose("Update (Spybot")
-		If($IDNO = MsgBox(0, "Spybot Update Check", "ResTool did not find any Spybot updates. Is the network connected?")) Then
+		If (_GetIP() = -1) Then
+			_error()
+			MsgBox(0, "ResTool NXT: Spybot", "Spybot could not update because the network was not connected. Please connect the computer to the Internet and restart Spybot.")
 			_appendlog(2, "Spybot", "Updates failed due to no network connection")
 			_end("Spybot")
 			Return 0
@@ -1259,7 +1285,7 @@ Func _runsb()
 	ShellExecute($32progfiledir & "\Spybot - Search & Destroy 2\SDScan.exe")
 	_debugwinwait("System Scan (Spybot", "Start a scan")
 	_debugwaitclick("System Scan (Spybot", "TButton3")
-	Sleep(100)
+	Sleep(1040)
 	;Handle "Do you need help?" dialog
 	If (WinExists("Spybot - Search & Destroy 2", "JSDialog")) Then
 		_debugwaitclick("Spybot - Search & Destroy 2", "TButton1")
@@ -1267,14 +1293,14 @@ Func _runsb()
 	;Begin Cleanup
 	_debugwinwait("System Scan (Spybot", "Scan Took", 3600000)
 	If (WinExists("System Scan (Spybot", "The antispyware scan came up without results.")) Then
-			MsgBox(0, "Spybot", "Spybot found 0 results.")
+			MsgBox(0, "ResTool NXT: Spybot", "Spybot found 0 results.")
 			_appendlog(3, "Spybot", "Spybot found 0 results.")
 	Else
 		;read result scans
 		Local $text = WinGetText("System Scan (Spybot")
 		$text = StringRight($text, StringInStr($text, "The antispyware scan found ") + 27)
 		$text = StringLeft($text, StringInStr($text, "results") - 1)
-		MsgBox(0, "Spybot", "Spybot found " & $text & " results.")
+		MsgBox(0, "ResTool NXT: Spybot", "Spybot found " & $text & " results.")
 		_appendlog(3, "Spybot", "Spybot found " & $text & " results.")
 		_debugwaitclick("System Scan (Spybot", "TButton3")
 		Sleep(1000)
@@ -1287,7 +1313,18 @@ Func _runsb()
 	WinClose("System Scan (Spybot")
 	_end("Spybot")
 EndFunc   ;==>_runsb
+#cs -----------------------------------------------------------------------------
+	FUNCTION: _installsb()
 
+	PURPOSE: Installs Super Anti Spyware
+
+	AUTHOR: Kevin Morgan
+
+	DATE OF LAST UPDATE: 2/5/15
+
+	NOTES: It's a pretty standard install. Handles the restart required dialog that
+		   will only occur if the program is uninstalled and installed before restart.
+#ce -----------------------------------------------------------------------------
 Func _installsb()
 	_start("Spybot Install")
 	_debugwaitclick("Select Setup Language", "TNewButton1")
@@ -1299,7 +1336,7 @@ Func _installsb()
 	_debugwaitclick("Setup - Spybot - Search & Destroy", "TNewButton2", "Ready to")
 	If (WinExists("Setup - Spybot - Search & Destroy", "Preparing to Install")) Then
 		_appendlog(2, "Spybot", "Restart Required")
-		If($IDYES = MsgBox($MB_YESNO, "Restart Required", "You must restart to install Spybot. Restart Now?")) Then
+		If($IDYES = MsgBox($MB_YESNO, "ResTool NXT: Spybot Requires Restart", "You must restart to install Spybot. Restart Now?")) Then
 			_queuestartup()
 			ShellExecute("shutdown", "/r /t 0", "", "", @SW_HIDE)
 		Else
@@ -1318,49 +1355,64 @@ EndFunc
 
 	AUTHOR: Kevin Morgan
 
-	DATE OF LAST UPDATE: A Long Time Ago
+	DATE OF LAST UPDATE: 2/6/15
 
-	NOTES: Really struggles with the update dialog.
+	NOTES: Not tested, but I think it should work fully.
 #ce -----------------------------------------------------------------------------
 Func _runsas()
 	_start("SuperAntiSpyware")
-
-	;Install if necessary
-	If (Not FileExists(@ProgramFilesDir & "\SUPERAntiSpyware\SUPERAntiSpyware.exe")) Then
-		Run(@ScriptDir & "\Script\Scanners\SAS\SAS.exe")
-		WinWait("SUPERAntiSpyware Setup", "")
-		MsgBox(0, "ResFail: No Automation", "Please click the Custom Install button.")
-		WinWait("SUPERAntiSpyware Free Edition Setup", "")
-		ControlClick("SUPERAntiSpyware Free Edition Setup", "", 1)
-		ControlClick("SUPERAntiSpyware Free Edition Setup", "", 1)
-		ControlClick("SUPERAntiSpyware Free Edition Setup", "", 1)
-		WinWait("SUPERAntiSpyware Free Edition Setup", "Configuration")
-		ControlClick("SUPERAntiSpyware Free Edition Setup", "", 1)
-		ControlClick("SUPERAntiSpyware Free Edition Setup", "", 2)
-		WinWait("SUPERAntiSpyware Professional Trial", "")
-		ControlClick("SUPERAntiSpyware Professional Trial", "", 2)
-
-	;otherwise run
-	Else
-		Run(@ProgramFilesDir & "\SUPERAntiSpyware\SUPERAntiSpyware.exe")
-		Run(@ProgramFilesDir & "\SUPERAntiSpyware\SUPERAntiSpyware.exe")
+	If (Not FileExists("C:\Program Files\SUPERAntiSpyware\SUPERAntiSpyware.exe")) Then
+		_debugwinwait("SUPERAntiSpyware Setup", "Custom")
+		;Click the custom install button on the main window
+		WinMove("SUPERAntiSpyware Setup", "", 0, 0)
+		WinActivate("SUPERAntiSpyware Setup", "")
+		Sleep(100)
+		MouseClick("left", 355, 324)
+		;Go through the setup dialogs: Welcome
+		_debugwaitclick("SUPERAntiSpyware Free Edition Setup", "Button8", "WARNING:")
+		;Go through the setup dialogs: EULA
+		_debugwaitclick("SUPERAntiSpyware Free Edition Setup", "Button8", "license agreement below to")
+		;Go through the setup dialogs: User Selection
+		_debugwaitclick("SUPERAntiSpyware Free Edition Setup", "Button8", "settings for this application")
+		;Go through the setup dialogs: Location
+		_debugwaitclick("SUPERAntiSpyware Free Edition Setup", "Button8", "Setup will install the files")
+		;Actual install progress is here
+		;Go through the setup dialogs: Configuration
+		_debugwaitclick("SUPERAntiSpyware Free Edition Setup", "Button1", "following options");Disable Post-install update. We'll do it ourselves
+		_debugwaitclick("SUPERAntiSpyware Free Edition Setup", "Button2", "following options");Disable Automatic Update (Pro bloatware)
+		_debugwaitclick("SUPERAntiSpyware Free Edition Setup", "Button8", "following options")
+		;Go through the setup dialogs: Finish
+		_debugwaitclick("SUPERAntiSpyware Free Edition Setup", "Button8", "Finished")
 	EndIf
-
-	;start a complete scan with full scan boost
-	WinWait("SUPERAntiSpyware Free Edition", "Complete Scan")
-	ControlClick("SUPERAntiSpyware Free Edition", "", 1011)
-	Sleep(60000)
-	ControlClick("SUPERAntiSpyware Free Edition", "", 1073)
-	ControlClick("SUPERAntiSpyware Free Edition", "", 1090)
-	WinWait("SUPERAntiSpyware Free Edition", "Scan Boost")
-	ControlClick("SUPERAntiSpyware Free Edition", "", "[CLASS:Button; INSTANCE:19]")
-	Send("{+}")
-	ControlClick("SUPERAntiSpyware Free Edition", "", 1008)
-	ControlClick("SUPERAntiSpyware Free Edition", "", 6)
-
-	;wait till it's done
-	WinWaitActive("SUPERAntiSpyware Scan Summary")
-
+	;update
+	ProcessClose("SUPERAntiSpyware.exe")
+	Local $inetObj = InetGet("http://cdn.superantispyware.com/SASDEFINITIONS.EXE", @TempDir & "\SASDEFS.EXE", 1, 0)
+	InetClose($inetObj)
+	Run(@TempDir & "\SASDEFS.EXE")
+	_debugwaitclick("SUPERAntiSpyware Definition Update", "Button1", "OK")
+	_debugwaitclick("Action Required", "Button1", "Please restart")
+	Sleep(1000)
+	;start SAS
+	Run("C:\Program Files\1SUPERAntiSpyware\SUPERAntiSpyware.exe")
+	Run("C:\Program Files\SUPERAntiSpyware\SUPERAntiSpyware.exe")
+	;Actually Scan
+	_debugwinwait("SUPERAntiSpyware Definition Update")
+	_debugwaitclick("SUPERAntiSpyware Free Edition", "Button3", "Scans your computer");select complete scan
+	_debugwaitclick("SUPERAntiSpyware Free Edition", "Button1");Press Start Scan...
+	_debugwaitclick("SUPERAntiSpyware Free Edition", "Button23", "all running items");Activate High Scan Boost
+	_debugwaitclick("SUPERAntiSpyware Free Edition", "Button21");Start Scan
+	;wait up to an hour for the scan to complete
+	_debugwinwait("SUPERAntiSpyware Scan Summary", "SUPER", 3600000);threats detected window
+	#include <String.au3>
+	Local $results = WinGetText("SUPERAntiSpyware Scan Summary", "")
+	$results = StringTrimLeft($results, (StringInStr($results, "Detected:") + 9))
+	$results = StringLeft($results, StringInStr($results, @LF))
+	MsgBox(0, "ResTool NXT: SuperAntiSpyware", "SAS Found " & $results & "threats.")
+	_debugwaitclick("SUPERAntiSpyware Scan Summary", "Button1")
+	_debugwaitclick("SUPERAntiSpyware Free Edition", "Button34", "Place a checkmark");remove selected items
+	_debugwaitclick("SUPERAntiSpyware Quarantine Complete", "Button1", "following items")
+	_debugwaitclick("SuperAntiSpyware Free Edition", "Button36", "Processed Items")
+	WinClose("SUPERAntiSpyware Free Edition")
 	_end("SuperAntiSpyware")
 EndFunc   ;==>_runsas
 #cs -----------------------------------------------------------------------------
@@ -1387,7 +1439,7 @@ Func _runhc()
 	WinWait("HouseCall Download", "")
 	Sleep(1000)
 	If (WinActive("Trend Micro HouseCall", "Unable to complete the download.")) Then
-		MsgBox(48, "Network Connection", "Plug in the proxy and press OK.")
+		MsgBox(48, "ResTool NXT: Network", "Connect computer to the internet and click OK")
 		_runhc()
 	Else
 		WinWaitClose("HouseCall Download")
@@ -1470,7 +1522,7 @@ Func _runcc()
 	;Results are located on the 9th line of text grabbed from the window
 	$results = StringSplit(WinGetText("Piriform CCleaner - Professional Edition"), @LF, 1)[8]
 
-	MsgBox(0, "", $results)
+	MsgBox(0, "ResTool NXT: CCleaner", $results)
 	_appendlog(4, "CCleaner File Cleaner", $results) ; mark these results in the log
 	Send("g");switches to registry (on a good day)
 	Local $rresults = 1
@@ -1511,11 +1563,11 @@ Func _runcc()
 			;close the dialog once all entries fixed
 			ControlClick("", $text, "Button5")
 			;return result to user
-			MsgBox(0, "", $rresults & " Registry Entries")
+			MsgBox(0, "ResTool NXT: CCleaner", $rresults & " Registry Entries")
 		;Fix Results not enabled, no errors to fix
 		Else
 			;set value to 0 and return to user
-			MsgBox(0, "", "0 Registry Entries")
+			MsgBox(0, "ResTool NXT: CCleaner", "0 Registry Entries")
 			$rresults = 0
 		EndIf
 		;reset text back to what it was at the start of the loop.
@@ -1550,12 +1602,12 @@ Func _runmwbar()
 	Send("{TAB}{TAB}{ENTER}")
 	Sleep(60000);wait for update for an entire minute
 	Send("{TAB}{TAB}{TAB}{ENTER}")
-	MsgBox($MB_TOPMOST, "Wait for scan to complete", "Close this message box when MWBAR is finished scanning completely.")
+	MsgBox($MB_TOPMOST, "ResTool NXT: MWBAR", "Close this message box when MWBAR is finished scanning completely.")
 	Send("!n")
 	;there was ABSOLUTELY NO WAY to get the results from the window, and MWBAR is stupid about logfiles.
 	;I'm sure there is a way, but we don't use it enough for it to necessitate the time to find one.
-	MsgBox($MB_TOPMOST, "View Results", "Results should be showing. Record them and then close this dialog")
-	MsgBox($MB_TOPMOST, "Confirm Close", "Don't close this until you've actually recorded the results!")
+	MsgBox($MB_TOPMOST, "ResTool NXT: MWBAR", "Results should be showing. Record them and then close this dialog")
+	MsgBox($MB_TOPMOST, "ResTool NXT: MWBAR", "Don't close this until you've actually recorded the results!")
 	Send("!e")
 	_end("Malwarebytes Anti Rootkit")
 EndFunc   ;==>_runmwbar
@@ -1581,7 +1633,7 @@ Func _runtdss()
 	If FileExists("C:\TDSSAI.txt") Then
 		;if we can't read it, log failure
 		If Not _FileReadToArray("C:\TDSSAI.txt", $aTDSSLog) Then
-			MsgBox(16, "Error", "Error parsing results")
+			MsgBox(16, "ResTool NXT: TDSSKiller", "Error parsing results")
 			_appendlog(2, "TDSSKiller", "Error parsing results")
 		;else parse it
 		Else
@@ -1594,7 +1646,7 @@ Func _runtdss()
 				EndIf
 			Next
 			;return these results nicely and log them
-			MsgBox(0, "Results", $suscount & " suspicious files, and " & $infcount & " infected files.")
+			MsgBox(0, "ResTool NXT: TDSSKiller", $suscount & " suspicious files, and " & $infcount & " infected files.")
 			_appendlog(3, "TDSSKiller", $suscount & " suspicious / " & $infcount & " infected")
 		EndIf
 	EndIf
@@ -2021,24 +2073,24 @@ Func _chkdsk()
 	$fd = FileOpen(@ScriptDir & "\Logs\chkdsk.txt")
 	$text = FileRead($fd)
 	If (StringInStr($text, "problems") = 0) Then
-		MsgBox(0, "No Errors", "Chkdsk did not find any errors")
+		MsgBox(0, "ResTool NXT: Disk Check", "Chkdsk did not find any errors")
 		_appendlog(4, "Disk Check")
 	Else
 		;if errors, tell the drive it needs to be checked and ask about reboot
-		If (MsgBox($mb_yesno, "Errors Found", "Should I schedule a repair at next boot?") == $idyes) Then
+		If (MsgBox($mb_yesno, "ResTool NXT: Disk Check", "Should I schedule a repair at next boot?") == $idyes) Then
 			ShellExecuteWait("fsutil", "dirty set c:")
 			;if user wants to reboot, do it. Otherwise don't; Repair happens at next restart
-			If (MsgBox($mb_yesno, "Chkdsk queued", "Chkdsk is scheduled to repair the hard drive at next boot. Would you like to restart now?") == $idyes) Then
+			If (MsgBox($mb_yesno, "ResTool NXT: Disk Check", "Chkdsk is scheduled to repair the hard drive at next boot. Would you like to restart now?") == $idyes) Then
 				_queuestartup()
 				_appendlog(3, "Disk Check", "Errors Found, Restarting to fix.")
 				ShellExecute("shutdown", "/r /t 0", "", "", @SW_HIDE)
 			Else
 				_appendlog(3, "Disk Check", "Errors found, Will fix at next restart.")
-				MsgBox(0, "Chkdsk queued", "Chkdsk will run the next time the computer restarts.")
+				MsgBox(0, "ResTool NXT: Disk Check", "Chkdsk will run the next time the computer restarts.")
 			EndIf
 		Else
 			_appendlog(4, "Disk Check", "Errors Found but no repair queued.")
-			MsgBox(0, "Chkdsk Not Queued", "Chkdsk will not fix disk errors.")
+			MsgBox(0, "ResTool NXT: Disk Check", "Chkdsk will not fix disk errors.")
 		EndIf
 	EndIf
 	FileClose($fd)
@@ -2067,19 +2119,19 @@ Func _sfc()
 	;Parse the data for most-to-least unique information:
 	;Failure to run/Success/Failure/Repair/None of the above
 	If Not (StringInStr($text, "pending") = 0) Then
-		MsgBox(0, "SFC Failed", "SFC repairs or Windows Updates required to continue.")
+		MsgBox(0, "ResTool NXT: SFC", "SFC repairs or Windows Updates are required to continue.")
 		_appendlog(2, "System File Check", "Failed due to pending updates")
 	ElseIf Not (StringInStr($text, "not find any integrity violations") = 0) Then
-		MsgBox(0, "SFC Finished", "SFC did not find any corrupt files")
+		MsgBox(0, "ResTool NXT: SFC", "SFC did not find any corrupt files")
 		_appendlog(4, "System File Check", "Did not find any corrupt files")
 	ElseIf Not (StringInStr($text, "unable to fix") = 0) Then
-		MsgBox(0, "SFC Failed", "SFC found corrupt files but could not repair them.")
+		MsgBox(0, "ResTool NXT: SFC", "SFC found corrupt files but could not repair them.")
 		_appendlog(2, "System File Check", "Found corrupt files but could not repair")
 	ElseIf Not (StringInStr($text, "successfully repaired") = 0) Then
-		MsgBox(0, "SFC Repairs Finished", "SFC found and repaired corrupt files.")
+		MsgBox(0, "ResTool NXT: SFC", "SFC found and repaired corrupt files.")
 		_appendlog(3, "System File Check", "Repaired corrupted files")
 	Else
-		MsgBox(0, "SFC Status Unknown", $text)
+		MsgBox(0, "ResTool NXT: SFC (STATUS UNKNOWN)", $text)
 		_appendlog(2, "System File Checker", "Failed with unknown status")
 		_appendlog(5, "DEBUG INFO -SFC-", $text)
 	EndIf
@@ -2165,10 +2217,10 @@ Func _dism()
 	;Catch errors and stuff: Failed, Fixed, No Error
 	If (StringInStr(FileRead(@WindowsDir & "\Logs\dism\dism.log"), "Failed to restore the image health", 1)) Then
 		_appendlog(2, "DISM", "DISM failed to reapair system file corruption.")
-		MsgBox($mb_iconwarning, "DISM", "DISM failed to restore the image health.")
+		MsgBox($mb_iconwarning, "ResTool NXT: DISM", "DISM failed to restore the image health.")
 	Else
 		_appendlog(4, "DISM")
-		MsgBox(0, "DISM", "DISM Completed without error, but whether it made repairs or not is unknown.")
+		MsgBox(0, "ResTool NXT: DISM", "DISM Completed without error, but whether it made repairs or not is unknown.")
 	EndIf
 	_end("DISM")
 EndFunc   ;==>_dism
@@ -2242,7 +2294,7 @@ Func _getmse()
 		ControlClick("Microsoft Security Essentials", "", "Button1")
 	Else
 		;Need to enable because Win 8. Not implemented
-		MsgBox(0, "Windows 8/8.1", "MSE already installed as Windows Defender. Please enable from Control Panel.")
+		MsgBox(0, "ResTool NXT: MSE Install", "MSE already installed as Windows Defender. Please enable from Control Panel.")
 	EndIf
 	_end("MSE Install")
 EndFunc   ;==>_getmse
