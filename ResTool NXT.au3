@@ -1,7 +1,6 @@
 ﻿#RequireAdmin
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=ResTool NXT.ico
-#AutoIt3Wrapper_Outfile_x64=J:\ResTool NXT_x64.exe
 #AutoIt3Wrapper_Compression=4
 #AutoIt3Wrapper_Compile_Both=y
 #AutoIt3Wrapper_Res_Description=ResTool NXT
@@ -598,7 +597,7 @@ Func _end($program)
 	GUICtrlSetStyle($progbar, 1)
 	GUICtrlSetData($progbar, 0)
 	GUICtrlSetData($proglabel, "ResTool Ready...")
-	_ITaskBar_SetProgressState($form, 1)
+	_ITaskBar_SetProgressState($form, 0)
 EndFunc   ;==>_end
 #cs ---------------------------------------------------------------------------
 	FUNCTION: _close()
@@ -1225,75 +1224,93 @@ EndFunc   ;==>_runeset
 	NOTES: Hangs in a lot of places, really need to optimize.
 #ce -----------------------------------------------------------------------------
 Func _runsb()
-	_start("Spybot S&D")
 	;if not installed, make it so (the install is pretty self explanatory)
 	If (Not FileExists($32progfiledir & "\Spybot - Search & Destroy 2\SDUpdate.exe")) Then
-		GUICtrlSetData($proglabel, "Installing Spybot")
-		Run(@ScriptDir & "\Script\Scanners\SB\SB.exe")
-		WinWait("Select Setup Language", "")
-		Send("{ENTER}")
-		WinWait("Setup - Spybot - Search & Destroy", "")
-		Send("{ENTER}")
-		WinWait("Setup - Spybot - Search & Destroy", "Donations")
-		Send("{ENTER}")
-		WinWait("Setup - Spybot - Search & Destroy", "Installation &")
-		Send("{ENTER}")
-		WinWait("Setup - Spybot - Search & Destroy", "License")
-		Send("{TAB}")
-		Send("A")
-		Send("{ENTER}")
-		WinWait("Setup - Spybot - Search & Destroy", "Ready")
-		Send("{ENTER}")
-		;it's a restart! Noooooo!
-		If (WinExists("Setup - Spybot - Search & Destroy", "Preparing to Install")) Then
-			If ($idyes = MsgBox($mb_yesno, "Restart required", "Restart to complete SB installation?")) Then
-				_queuestartup()
-				_appendlog(5, "Spybot S&D", "Restart required to complete install")
-				Send("{ENTER}")
-			Else
-				Send("N")
-				Send("{ENTER}")
-				_appendlog(3, "Spybot Search & Destroy", "Required a restart to complete installation, cancelled.")
-				Return 0
-			EndIf
+		If (_installsb() = 0) Then
+			Return 0
 		EndIf
-		;finish
-		WinWait("Setup - Spybot - Search & Destroy", "Completing")
-		Send("{ENTER}")
 	EndIf
-	;close the start center if it opens
-	If (ProcessExists("SDWelcome.exe")) Then
-		WinActivate("Start Center (Spybot - Search & Destroy 2.1)")
-		Send("!{F4}")
-	EndIf
-
-	;start updating SpyBot
+	_start("Spybot")
+	;Begin Updates
 	GUICtrlSetData($proglabel, "Updating Spybot")
 	ShellExecute($32progfiledir & "\Spybot - Search & Destroy 2\SDUpdate.exe")
-	WinWait("Update (Spybot - Search & Destroy 2.1, administrator privileges)")
-	Sleep(1000)
-	WinWait("Update (Spybot - Search & Destroy 2.1, administrator privileges)", "Status check complete.")
-	Send("{TAB}{ENTER}")
-	WinWait("Update (Spybot - Search & Destroy 2.1, administrator privileges)", "+++")
-	WinClose("Update (Spybot - Search & Destroy 2.1, administrator privileges)")
-	GUICtrlSetData($proglabel, "Spybot Scan Started")
-
-	;start a scan
-	ShellExecute($32progfiledir & "\Spybot - Search & Destroy 2\SDScan.exe")
-	WinWait("System Scan (Spybot - Search & Destroy 2.1, administrator privileges)")
-	ControlClick("System Scan (Spybot - Search & Destroy 2.1, administrator privileges)", "", "[CLASS:TButton; INSTANCE:3]")
-	WinWait("System Scan (Spybot - Search & Destroy 2.1, administrator privileges)", "Scan took ")
-	If (WinExists("System Scan (Spybot - Search & Destroy 2.1, administrator privileges)", "The antispyware scan came up without results.")) Then
-		WinClose("System Scan (Spybot - Search & Destroy 2.1, administrator privileges)")
-		_appendlog(4, "Spybot Search and Destroy", "No Infected Files")
+	While (ControlCommand("Update (Spybot", "", "TButton1", "IsEnabled") = 0)
+		Sleep(100)
+	WEnd
+	Sleep(2000)
+	If (WinExists("Update (Spybot", "There are updates available!")) Then
+		_debugwaitclick("Update (Spybot", "TButton1")
+		_debugwinwait("Update (Spybot", "+++")
+		_appendlog(3, "Spybot", "Updates were installed")
+		WinClose("Update (Spybot")
 	Else
-		ControlClick("System Scan (Spybot - Search & Destroy 2.1, administrator privileges)", "", "[CLASS:TButton; INSTANCE:3]")
-		ControlClick("System Scan (Spybot - Search & Destroy 2.1, administrator privileges)", "Fix selected", "[CLASS:TButton; INSTANCE:1]")
-		_appendlog(4, "Spybot Search and Destroy", "Infected Files were Found.")
+		WinClose("Update (Spybot")
+		If($IDNO = MsgBox(0, "Spybot Update Check", "ResTool did not find any Spybot updates. Is the network connected?")) Then
+			_appendlog(2, "Spybot", "Updates failed due to no network connection")
+			_end("Spybot")
+			Return 0
+		Else
+			_appendlog(3, "Spybot", "No Updates were found")
+		EndIf
 	EndIf
-	_end("Spybot S&D")
+
+	;Begin Scans
+	GUICtrlSetData($proglabel, "Spybot Scan Started")
+	ShellExecute($32progfiledir & "\Spybot - Search & Destroy 2\SDScan.exe")
+	_debugwinwait("System Scan (Spybot", "Start a scan")
+	_debugwaitclick("System Scan (Spybot", "TButton3")
+	Sleep(100)
+	;Handle "Do you need help?" dialog
+	If (WinExists("Spybot - Search & Destroy 2", "JSDialog")) Then
+		_debugwaitclick("Spybot - Search & Destroy 2", "TButton1")
+	EndIf
+	;Begin Cleanup
+	_debugwinwait("System Scan (Spybot", "Scan Took", 3600000)
+	If (WinExists("System Scan (Spybot", "The antispyware scan came up without results.")) Then
+			MsgBox(0, "Spybot", "Spybot found 0 results.")
+			_appendlog(3, "Spybot", "Spybot found 0 results.")
+	Else
+		;read result scans
+		Local $text = WinGetText("System Scan (Spybot")
+		$text = StringRight($text, StringInStr($text, "The antispyware scan found ") + 27)
+		$text = StringLeft($text, StringInStr($text, "results") - 1)
+		MsgBox(0, "Spybot", "Spybot found " & $text & " results.")
+		_appendlog(3, "Spybot", "Spybot found " & $text & " results.")
+		_debugwaitclick("System Scan (Spybot", "TButton3")
+		Sleep(1000)
+			_debugwaitclick("System Scan (Spybot", "TButton1", "Scan finished.")
+			;wait for cleaning to finish
+			While(ControlCommand("System Scan (Spybot", "", "TButton1", "IsEnabled"))
+				Sleep(100)
+			WEnd
+	EndIf
+	WinClose("System Scan (Spybot")
+	_end("Spybot")
 EndFunc   ;==>_runsb
 
+Func _installsb()
+	_start("Spybot Install")
+	_debugwaitclick("Select Setup Language", "TNewButton1")
+	_debugwaitclick("Setup - Spybot - Search & Destroy", "TNewButton1", "Welcome")
+	_debugwaitclick("Setup - Spybot - Search & Destroy", "TNewButton2", "Donations")
+	_debugwaitclick("Setup - Spybot - Search & Destroy", "TNewButton2", "Installation")
+	_debugwaitclick("Setup - Spybot - Search & Destroy", "TNewRadioButton1", "License")
+	_debugwaitclick("Setup - Spybot - Search & Destroy", "TNewButton2", "License")
+	_debugwaitclick("Setup - Spybot - Search & Destroy", "TNewButton2", "Ready to")
+	If (WinExists("Setup - Spybot - Search & Destroy", "Preparing to Install")) Then
+		_appendlog(2, "Spybot", "Restart Required")
+		If($IDYES = MsgBox($MB_YESNO, "Restart Required", "You must restart to install Spybot. Restart Now?")) Then
+			_queuestartup()
+			ShellExecute("shutdown", "/r /t 0", "", "", @SW_HIDE)
+		Else
+			_end("Spybot Install")
+			Return 0
+		EndIf
+	EndIf
+	_debugwaitclick("Setup - Spybot - Search & Destroy", "TNewCheckListBox1", "Completing", 300000, "left", 1, 10, 10)
+	_debugwaitclick("Setup - Spybot - Search & Destroy", "TNewButton2", "Completing")
+	_end("Spybot Install")
+EndFunc
 #cs -----------------------------------------------------------------------------
 	FUNCTION: _runsas()
 
