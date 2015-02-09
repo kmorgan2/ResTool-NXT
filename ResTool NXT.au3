@@ -4,7 +4,7 @@
 #AutoIt3Wrapper_Compression=4
 #AutoIt3Wrapper_Compile_Both=y
 #AutoIt3Wrapper_Res_Description=ResTool NXT
-#AutoIt3Wrapper_Res_Fileversion=0.1.150206.0
+#AutoIt3Wrapper_Res_Fileversion=0.2.150209.0
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #Region ###Includes
 #include <GUIConstants.au3>
@@ -177,8 +177,7 @@ GUICtrlSetOnEvent($mwbar, "_runmwbar")
 GUICtrlSetOnEvent($tdss, "_runtdss")
 
 ;currently scanner/cc removal not implemented
-GUICtrlSetOnEvent($rmscan, "") ;Func _remscans
-GUICtrlSetStyle($rmscan, $ws_disabled)
+GUICtrlSetOnEvent($rmscan, "_remscans") ;Func _remscans
 
 GUICtrlSetOnEvent($mse, "_GetMSE")
 GUICtrlSetOnEvent($ticket, "_openticket")
@@ -732,7 +731,7 @@ EndFunc   ;==>_updatelastopen
 
 	AUTHOR: Kevin Morgan
 
-	DATE OF LAST UPDATE: A Long Time Ago
+	DATE OF LAST UPDATE: 2/9/15
 
 	NOTES: Takes 3 arguments: update code, program name, [message]
 	Codes:	1: Program/Process start
@@ -746,15 +745,9 @@ Func _appendlog($code, $prog, $msg = "")
 
 	;get logfile "'X':\Logs\ticketno.txt"
 	Local $log = StringLeft(@ScriptDir, 3) & "Logs\" & $ticketno & ".txt"
-
-	;if file doesn't exist, create it
-	If (Not FileExists($log)) Then
-		_FileCreate($log)
-	EndIf
-
 	;open the logfile
-	$logfile = FileOpen($log, 1)
-	If (Not $logfile = -1) Then
+	$logfile = FileOpen($log, 9)
+	If Not ($logfile = -1) Then
 
 		;get the timestamp for the start of our log entry
 		Local $logentry = _NowCalc()
@@ -762,7 +755,7 @@ Func _appendlog($code, $prog, $msg = "")
 		;complete the rest of the entry & concatenate
 		Switch $code
 			Case 1
-				$logentry = $logentry & " Starting  " & $prog & "."
+				$logentry = $logentry & " Starting " & $prog & "."
 			Case 2
 				$logentry = $logentry & " Error occurred while running " & $prog & "."
 			Case 3
@@ -781,7 +774,6 @@ Func _appendlog($code, $prog, $msg = "")
 		FileWriteLine($logfile, $logentry)
 		FileClose($logfile)
 	Else
-
 		;tell the user that everything is broken
 		MsgBox(0, "ResTool NXT: Logfile", "Error opening logfile. You should probably restart ResTool.")
 	EndIf
@@ -1243,9 +1235,9 @@ EndFunc   ;==>_runeset
 
 	AUTHOR: Kevin Morgan
 
-	DATE OF LAST UPDATE: 2/5/15
+	DATE OF LAST UPDATE: 2/9/15
 
-	NOTES: Not fully tested. Think the results might not work
+	NOTES: Fully Tested and 100% probably unlikely to not work
 #ce -----------------------------------------------------------------------------
 Func _runsb()
 	;if not installed, make it so (the install is pretty self explanatory)
@@ -1258,6 +1250,11 @@ Func _runsb()
 	;Begin Updates
 	GUICtrlSetData($proglabel, "Updating Spybot")
 	ShellExecute($32progfiledir & "\Spybot - Search & Destroy 2\SDUpdate.exe")
+	Sleep(1000)
+	;Handle "Do you need help?" dialog
+	If (WinExists("Spybot - Search & Destroy 2", "JSDialog")) Then
+		_debugwaitclick("Spybot - Search & Destroy 2", "TButton1")
+	EndIf
 	While (ControlCommand("Update (Spybot", "", "TButton1", "IsEnabled") = 0)
 		Sleep(100)
 	WEnd
@@ -1285,21 +1282,21 @@ Func _runsb()
 	ShellExecute($32progfiledir & "\Spybot - Search & Destroy 2\SDScan.exe")
 	_debugwinwait("System Scan (Spybot", "Start a scan")
 	_debugwaitclick("System Scan (Spybot", "TButton3")
-	Sleep(1040)
+	Sleep(1000)
 	;Handle "Do you need help?" dialog
 	If (WinExists("Spybot - Search & Destroy 2", "JSDialog")) Then
 		_debugwaitclick("Spybot - Search & Destroy 2", "TButton1")
 	EndIf
 	;Begin Cleanup
-	_debugwinwait("System Scan (Spybot", "Scan Took", 3600000)
+	_debugwinwait("System Scan (Spybot", "Scan took", 3600000)
 	If (WinExists("System Scan (Spybot", "The antispyware scan came up without results.")) Then
 			MsgBox(0, "ResTool NXT: Spybot", "Spybot found 0 results.")
 			_appendlog(3, "Spybot", "Spybot found 0 results.")
 	Else
 		;read result scans
 		Local $text = WinGetText("System Scan (Spybot")
-		$text = StringRight($text, StringInStr($text, "The antispyware scan found ") + 27)
-		$text = StringLeft($text, StringInStr($text, "results") - 1)
+		$text = StringTrimLeft($text, StringInStr($text, "found ")+ 5)
+		$text = StringLeft($text, StringInStr($text, "results") - 2)
 		MsgBox(0, "ResTool NXT: Spybot", "Spybot found " & $text & " results.")
 		_appendlog(3, "Spybot", "Spybot found " & $text & " results.")
 		_debugwaitclick("System Scan (Spybot", "TButton3")
@@ -1316,11 +1313,11 @@ EndFunc   ;==>_runsb
 #cs -----------------------------------------------------------------------------
 	FUNCTION: _installsb()
 
-	PURPOSE: Installs Super Anti Spyware
+	PURPOSE: Installs Spybot
 
 	AUTHOR: Kevin Morgan
 
-	DATE OF LAST UPDATE: 2/5/15
+	DATE OF LAST UPDATE: 2/9/15
 
 	NOTES: It's a pretty standard install. Handles the restart required dialog that
 		   will only occur if the program is uninstalled and installed before restart.
@@ -1355,9 +1352,9 @@ EndFunc
 
 	AUTHOR: Kevin Morgan
 
-	DATE OF LAST UPDATE: 2/6/15
+	DATE OF LAST UPDATE: 2/9/15
 
-	NOTES: Not tested, but I think it should work fully.
+	NOTES: Fully Tested and 100% probably unlikely to not work
 #ce -----------------------------------------------------------------------------
 Func _runsas()
 	_start("SuperAntiSpyware")
@@ -1393,27 +1390,41 @@ Func _runsas()
 	_debugwaitclick("Action Required", "Button1", "Please restart")
 	Sleep(1000)
 	;start SAS
-	Run("C:\Program Files\1SUPERAntiSpyware\SUPERAntiSpyware.exe")
+	Run("C:\Program Files\SUPERAntiSpyware\SUPERAntiSpyware.exe")
 	Run("C:\Program Files\SUPERAntiSpyware\SUPERAntiSpyware.exe")
 	;Actually Scan
-	_debugwinwait("SUPERAntiSpyware Definition Update")
+	_debugwinwait("SUPERAntiSpyware Free Edition")
 	_debugwaitclick("SUPERAntiSpyware Free Edition", "Button3", "Scans your computer");select complete scan
 	_debugwaitclick("SUPERAntiSpyware Free Edition", "Button1");Press Start Scan...
 	_debugwaitclick("SUPERAntiSpyware Free Edition", "Button23", "all running items");Activate High Scan Boost
 	_debugwaitclick("SUPERAntiSpyware Free Edition", "Button21");Start Scan
 	;wait up to an hour for the scan to complete
-	_debugwinwait("SUPERAntiSpyware Scan Summary", "SUPER", 3600000);threats detected window
-	#include <String.au3>
-	Local $results = WinGetText("SUPERAntiSpyware Scan Summary", "")
-	$results = StringTrimLeft($results, (StringInStr($results, "Detected:") + 9))
-	$results = StringLeft($results, StringInStr($results, @LF))
-	MsgBox(0, "ResTool NXT: SuperAntiSpyware", "SAS Found " & $results & "threats.")
-	_debugwaitclick("SUPERAntiSpyware Scan Summary", "Button1")
-	_debugwaitclick("SUPERAntiSpyware Free Edition", "Button34", "Place a checkmark");remove selected items
-	_debugwaitclick("SUPERAntiSpyware Quarantine Complete", "Button1", "following items")
-	_debugwaitclick("SuperAntiSpyware Free Edition", "Button36", "Processed Items")
+	_debugwinwait("SUPERAntiSpyware Scan", "", 3600000);threats detected window
+	If WinExists("SUPERAntiSpyware Scan Complete") Then
+		MsgBox(0, "ResTool NXT: SuperAntiSpyware", "SAS Found 0 threats.")
+		_appendlog(3, "SUPERAntiSpyware", "0 threats.")
+		_debugwaitclick("SUPERAntiSpyware Scan Complete", "Button1")
+	Else
+		Local $results = WinGetText("SUPERAntiSpyware Scan Summary", "")
+		$results = StringTrimLeft($results, (StringInStr($results, "Detected:") + 9))
+		$results = StringLeft($results, StringInStr($results, @LF) -1)
+		MsgBox(0, "ResTool NXT: SuperAntiSpyware", "SAS Found " & $results & " threats.")
+		_appendlog(3, "SUPERAntiSpyware", $results & " threats.")
+		_debugwaitclick("SUPERAntiSpyware Scan Summary", "Button1")
+		_debugwaitclick("SUPERAntiSpyware Free Edition", "Button44", "Place a checkmark");remove selected items
+		While(WinActive("SUPERAntiSpyware Free Edition"))
+			Sleep(100)
+		WEnd
+		If WinExists("SUPERAntiSpyware - Reboot Required") Then
+			_debugwaitclick("SUPERAntiSpyware - Reboot Required", "Button2")
+		Else
+			_debugwaitclick("SUPERAntiSpyware Quarantine Complete", "Button1", "following items")
+		EndIf
+		_debugwinwait("SUPERAntiSpyware Free Edition")
+		_debugwaitclick("SUPERAntiSpyware Free Edition", "Button46", "Processed Items")
+	EndIf
 	WinClose("SUPERAntiSpyware Free Edition")
-	_end("SuperAntiSpyware")
+	_end("SUPERAntiSpyware")
 EndFunc   ;==>_runsas
 #cs -----------------------------------------------------------------------------
 	FUNCTION: _runhc()
@@ -2370,6 +2381,73 @@ EndFunc   ;==>_remkas
 Func _remmca()
 
 EndFunc   ;==>_remmca
+
+#cs -----------------------------------------------------------------------------
+	FUNCTION: _remscans()
+
+	PURPOSE: Auto uninstalls all the scanners
+
+	AUTHOR: Kevin Morgan
+
+	DATE OF LAST UPDATE: 2/9/15
+
+	NOTES: Uninstalls MWB, ESET, SB, SAS, CC
+#ce -----------------------------------------------------------------------------
+Func _remscans()
+	_start("Scanner Uninstall")
+	;uninstall MWB
+	If FileExists($32progfiledir & "\Malwarebytes Anti-Malware\unins000.exe") Then
+		Run($32progfiledir & "\Malwarebytes Anti-Malware\unins000.exe")
+		_debugwaitclick("Malwarebytes Anti-Malware Uninstall", "Button1")
+		_debugwaitclick("Malwarebytes Anti-Malware Uninstall", "Button2", "restart now")
+		_appendlog(4, "Malwarebytes Uninstall")
+	Else
+		_appendlog(5, "Malwarebytes Uninstall", "Not Found. Skipping")
+	EndIf
+	;uninstall ESET
+	If FileExists($32progfiledir & "\ESET\ESET Online Scanner\OnlineScannerUninstaller.exe") Then
+		Run($32progfiledir & "\ESET\ESET Online Scanner\OnlineScannerUninstaller.exe")
+		_debugwaitclick("NOD32 OnlineScanner", "Button1")
+		_debugwaitclick("Eset OnlineScanner", "Button1")
+		_appendlog(4, "ESET Online Scanner Uninstall")
+	Else
+		_appendlog(5, "ESET Online Scanner Uninstall", "Not Found. Skipping")
+	EndIf
+	;uninstall Spybot
+	If FileExists($32progfiledir & "\Spybot - Search & Destroy 2\unins000.exe") Then
+		Run($32progfiledir & "\Spybot - Search & Destroy 2\unins000.exe")
+		_debugwaitclick("Spybot - Search & Destroy Uninstall", "Button1")
+		_debugwaitclick("", "TNewButton3", "Immunizer")
+		_debugwaitclick("", "TNewCheckBox1", "comments")
+		_debugwaitclick("", "TNewButton4", "comments")
+		_debugwaitclick("Spybot - Search & Destroy Uninstall", "Button2")
+		_appendlog(4, "Spybot Uninstall")
+	Else
+		_appendlog(5, "Spybot Uninstall", "Not Found. Skipping")
+	EndIf
+	;uninstall SAS
+	If FileExists("C:\Program Files\SUPERAntiSpyware\Uninstall.exe") Then
+		Run("C:\Program Files\SUPERAntiSpyware\Uninstall.exe")
+		_debugwaitclick("SUPERAntiSpyware Uninstaller", "Button1")
+		_debugwaitclick("SUPERAntiSpyware Uninstall", "Button1")
+		_debugwinwait("SUPERAntiSpyware.com")
+		WinClose("SuperAntiSpyware.com")
+		_appendlog(4, "SUPERAntiSpyware Uninstall")
+	Else
+		_appendlog(5, "SUPERAntiSpyware Uninstall", "Not Found. Skipping")
+	EndIf
+	;uninstall CC
+	If FileExists("C:\Program Files\CCleaner\uninst.exe") Then
+		Run("C:\Program Files\CCleaner\uninst.exe")
+		_debugwaitclick("CCleaner", "Button2", "uninstallation")
+		_debugwaitclick("CCleaner", "Button2", "uninstalled")
+		_debugwaitclick("CCleaner", "Button2", "been uninstalled")
+		_appendlog(4, "CCleaner Uninstall")
+	Else
+		_appendlog(5, "CCleaner Uninstall", "Not Found. Skipping")
+	EndIf
+	_end("Scanner Uninstall")
+EndFunc
 #EndRegion ###Removal
 #Region ###Other
 #cs -----------------------------------------------------------------------------
