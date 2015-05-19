@@ -63,7 +63,7 @@ ResTool may be unable to complete execution of a sctipt if the expected state of
 ## Interpreting Log Data
 ResTool's standard log, located in the 'Logs' folder on the ResTool flash drive, contains a log of all procedures, errors, and results captured by the program. Currently, log entries, which are separated by linebreaks, will resemble:  
 `YYYY/MM/DD hh:mm:ss Log Message`  
-For Example, the logfile entry for failing to connect the computer to the internet before running an ESET scan looks like:  
+For example, the logfile entry for failing to connect the computer to the internet before running an ESET scan looks like:  
 `2015/01/01 12:34:56 Error occurred while running ESET Online Scanner. The program also generated the following message: No Internet connection. Scan aborted.`
 
 The log is built, as you can see, for human readability. However, it only has five classes of entry to increase consistency:
