@@ -4,7 +4,7 @@
 #AutoIt3Wrapper_Compression=4
 #AutoIt3Wrapper_Compile_Both=y
 #AutoIt3Wrapper_Res_Description=ResTool NXT
-#AutoIt3Wrapper_Res_Fileversion=0.2.150209.0
+#AutoIt3Wrapper_Res_Fileversion=0.2.150529.0
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #Region ###Includes
 #include <GUIConstants.au3>
@@ -24,6 +24,7 @@
 #include <ITaskBarList.au3>
 #include <String.au3>
 #include <Array.au3>
+#include <Inet.au3>
 #EndRegion ###Includes
 #Region ###Program Init and Loop
 
@@ -176,7 +177,6 @@ GUICtrlSetOnEvent($temp, "_tempfr")
 GUICtrlSetOnEvent($mwbar, "_runmwbar")
 GUICtrlSetOnEvent($tdss, "_runtdss")
 
-;currently scanner/cc removal not implemented
 GUICtrlSetOnEvent($rmscan, "_remscans") ;Func _remscans
 
 GUICtrlSetOnEvent($mse, "_GetMSE")
@@ -212,6 +212,33 @@ GUICtrlSetOnEvent($auto, "_EasterEgg")
 GUICtrlSetStyle($progbar, 1)
 GUICtrlSetData($progbar, 0)
 GUICtrlSetData($proglabel, "ResTool Ready...")
+
+Dim $restech = "http://restech.niu.edu/ResTool/"
+;,[$filename, $directory, $webaddress]
+Dim $fileList[22][3] = [["CF.exe", "\Script\Scanners\CF", $restech & "Combofix.exe"], _
+					   ["MWB.exe", "\Script\Scanners\MWB", $restech & "MWB.exe"], _
+					   ["ESET.exe", "\Script\Scanners\ESET", "http://download.eset.com/special/eos/esetsmartinstaller_enu.exe"], _
+					   ["SB.exe", "\Script\Scanners\SB", $restech & "Spybot.exe"], _
+					   ["SAS.exe", "\Script\Scanners\SAS", $restech & "SAS.exe"], _
+					   ["HC.exe", "\Script\Scanners\HC", "http://go.trendmicro.com/housecall8/HousecallLauncher64.exe"], _
+					   ["CC.exe", "\Script\", $restech & "Ccleaner.exe"], _
+					   ["AIO.exe", "\Script\", "http://www.tweaking.com/files/setups/tweaking.com_windows_repair_aio_setup.exe"], _
+					   ["devcon.exe", "\Script\OOB\32", "http://intranet.restech.niu.edu/f/1041/devcon32.exe"], _
+					   ["devcon.exe", "\Script\OOB\64", "http://intranet.restech.niu.edu/f/1042/devcon64.exe"], _
+					   ["WiFi.xml", "\Script\OOB", "http://intranet.restech.niu.edu/f/1037/WiFi.xml"], _
+					   ["MSE32.exe", "\Script\Installers", $restech & "MSEx86.exe"], _
+					   ["MSE64.exe", "\Script\Installers", $restech & "MSEx64.exe"], _
+					   ["RMC.exe", "\Script\Uninstallers", $restech & "MCPR.exe"], _
+					   ["RNOR.exe", "\Script\Uninstallers", $restech & "NortonRT.exe"], _
+					   ["RAVG64.exe", "\Script\Uninstallers", $restech & "AVGr64.exe"], _
+					   ["RAVG86.exe", "\Script\Uninstallers", $restech & "AVGr86.exe"], _
+					   ["RAVS.exe", "\Script\Uninstallers", $restech & "Aswclear.exe"], _
+					   ["RKAS.exe", "\Script\Uninstallers", $restech & "KRT.exe"], _
+					   ["Pharos.exe", "\Script\Installers", "http://vm-pharosprint1.niunt.niu.edu/uniprint/AnywherePrint_for_Lte.exe"], _
+					   ["MWBAR.exe", "\Script\Scanners", "http://downloads.malwarebytes.org/file/mbar/"], _
+					   ["TDSS.exe", "\Script\Scanners", "http://media.kaspersky.com/utilities/VirusUtilities/EN/tdsskiller.exe"]]
+
+_filecheck()
 
 ;Main program loop. Really complicated.
 While 1
@@ -435,6 +462,97 @@ Func _readregstats($shortcode)
 EndFunc   ;==>_readregstats
 #EndRegion ###AutoHelpers
 #Region ###Helpers
+#Region ###Helpers-FileVerification
+#cs ---------------------------------------------------------------------------
+	FUNCTION: _filecheck()
+
+	PURPOSE: Make sure all files are present or redownload if needed
+
+	AUTHOR: Kevin Morgan
+
+	DATE OF LAST UPDATE: 5/29/2015
+
+	NOTES:
+#ce -----------------------------------------------------------------------------
+Func _filecheck()
+	For $i = 0 to 21
+		If Not _filechecksingle($fileList[$i][0], $fileList[$i][1], $fileList[$i][2]) Then
+			_appendlog(2, $fileList[$i][0] & " is missing or corrupt. Attempting to re-download.")
+			GUICtrlSetData($proglabel, "Downloading " & $fileList[$i][0])
+			If Not _download($fileList[$i][0], $fileList[$i][1], $fileList[$i][2]) Then
+				MsgBox(0,"ResTool NXT: File Error", "ResTool NXT could not download " & $fileList[$i][0] & ". Check the log for more information.")
+				_appendlog(2, "Download of " & $fileList[$i][0] & " from " & $fileList[$i][2])
+			Else
+				_appendlog(4, "Download of " & $fileList[$i][0])
+			EndIf
+		Else
+			GUICtrlSetData($proglabel, "Verified " & $fileList[$i][0])
+		EndIf
+	Next
+EndFunc
+
+#cs ---------------------------------------------------------------------------
+	FUNCTION: _filechecksingle()
+
+	PURPOSE: Make sure a single file is present and  the correct size
+
+	AUTHOR: Kevin Morgan
+
+	DATE OF LAST UPDATE: 5/29/2015
+
+	NOTES:
+#ce -----------------------------------------------------------------------------
+Func _filechecksingle($filename, $directory, $webAddress)
+	$conditional = False
+	If FileExists(@ScriptDir & $directory & $filename) Then
+		$fileSize = FileGetSize(@ScriptDir & $directory & $filename)
+		$iFileSize = InetGetSize($webAddress)
+		$conditional = $fileSize = $iFileSize
+	EndIf
+	Return $conditional
+EndFunc
+
+#cs ---------------------------------------------------------------------------
+	FUNCTION: _filecheck()
+
+	PURPOSE: Make sure all files are present or redownload if needed
+
+	AUTHOR: Kevin Morgan
+
+	DATE OF LAST UPDATE: 5/29/2015
+
+	NOTES: Imported from ResTool Rebuilder. Yay code reuse!
+#ce -----------------------------------------------------------------------------
+Func _Download($fileName, $directory, $webAddress)
+	Local $inetObj = InetGet($webAddress, @TempDir & "\" & $fileName, 1, 1)
+	GUICtrlSetData($progbar, 0)
+	Do
+		Sleep(100)
+		GUICtrlSetData($progbar, (InetGetInfo($inetObj, $INET_DOWNLOADREAD) / InetGetSize($webAddress)))
+	Until InetGetInfo($inetObj, $INET_DOWNLOADCOMPLETE)
+	InetClose($inetObj)
+	_Move($fileName, $directory)
+	GUICtrlSetData($proglabel, 100)
+	Sleep(100)
+	Return True
+EndFunc   ;==>_Download
+
+#cs ---------------------------------------------------------------------------
+	FUNCTION: _move()
+
+	PURPOSE: Move a file from the temporary directory to its destination
+
+	AUTHOR: Kevin Morgan
+
+	DATE OF LAST UPDATE: 5/29/2015
+
+	NOTES: Imported from ResTool Rebuilder. Yay code reuse!
+#ce -----------------------------------------------------------------------------
+Func _Move($file, $dir)
+	RunWait(@ComSpec & " /c move " & @TempDir & "\" & $file & " " & @ScriptDir & "\" & $dir, "", @SW_HIDE)
+EndFunc   ;==>Move
+
+#EndRegion
 #Region ###Helpers-ErrorHandling
 #cs ---------------------------------------------------------------------------
 	FUNCTION: _debugwaitclick()
