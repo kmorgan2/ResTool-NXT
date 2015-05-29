@@ -1,10 +1,12 @@
 ﻿#RequireAdmin
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=ResTool NXT.ico
+#AutoIt3Wrapper_Outfile=H:\ResTool NXT_x64.exe
+#AutoIt3Wrapper_Outfile_x64=H:\ResTool NXT.exe
 #AutoIt3Wrapper_Compression=4
 #AutoIt3Wrapper_Compile_Both=y
 #AutoIt3Wrapper_Res_Description=ResTool NXT
-#AutoIt3Wrapper_Res_Fileversion=0.2.150529.0
+#AutoIt3Wrapper_Res_Fileversion=0.2.150529.1
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #Region ###Includes
 #include <GUIConstants.au3>
@@ -239,6 +241,10 @@ Dim $fileList[22][3] = [["CF.exe", "\Script\Scanners\CF", $restech & "Combofix.e
 					   ["TDSS.exe", "\Script\Scanners", "http://media.kaspersky.com/utilities/VirusUtilities/EN/tdsskiller.exe"]]
 
 _filecheck()
+
+GUICtrlSetStyle($progbar, 1)
+GUICtrlSetData($progbar, 0)
+GUICtrlSetData($proglabel, "ResTool Ready...")
 
 ;Main program loop. Really complicated.
 While 1
@@ -476,6 +482,7 @@ EndFunc   ;==>_readregstats
 #ce -----------------------------------------------------------------------------
 Func _filecheck()
 	For $i = 0 to 21
+		GUICtrlSetData($proglabel, "Verifying " & $fileList[$i][0])
 		If Not _filechecksingle($fileList[$i][0], $fileList[$i][1], $fileList[$i][2]) Then
 			_appendlog(2, $fileList[$i][0] & " is missing or corrupt. Attempting to re-download.")
 			GUICtrlSetData($proglabel, "Downloading " & $fileList[$i][0])
@@ -504,10 +511,10 @@ EndFunc
 #ce -----------------------------------------------------------------------------
 Func _filechecksingle($filename, $directory, $webAddress)
 	$conditional = False
-	If FileExists(@ScriptDir & $directory & $filename) Then
-		$fileSize = FileGetSize(@ScriptDir & $directory & $filename)
+	If FileExists(@ScriptDir & $directory & "\" & $filename) Then
+		$fileSize = FileGetSize(@ScriptDir & $directory & "\" & $filename)
 		$iFileSize = InetGetSize($webAddress)
-		$conditional = $fileSize = $iFileSize
+		$conditional = ($fileSize = $iFileSize)
 	EndIf
 	Return $conditional
 EndFunc
@@ -532,7 +539,7 @@ Func _Download($fileName, $directory, $webAddress)
 	Until InetGetInfo($inetObj, $INET_DOWNLOADCOMPLETE)
 	InetClose($inetObj)
 	_Move($fileName, $directory)
-	GUICtrlSetData($proglabel, 100)
+	GUICtrlSetData($progbar, 100)
 	Sleep(100)
 	Return True
 EndFunc   ;==>_Download
