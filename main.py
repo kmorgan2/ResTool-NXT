@@ -750,7 +750,7 @@ def listen():
 
     def listen_failed(_):
         ctypes.windll.user32.MessageBoxW(0,
-                                         u"Unable to bind ResTool to the necessary network port.\n"+
+                                         u"Unable to bind ResTool to the necessary network port.\n" +
                                          "Verify only one instance of ResTool is running\n" +
                                          "and no other services are using port 8000.\n" +
                                          "Restool will now terminate.",
