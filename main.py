@@ -16,7 +16,6 @@ from twisted.internet import tksupport, reactor, threads
 from twisted.internet.protocol import Protocol, Factory
 from twisted.internet.endpoints import TCP4ServerEndpoint
 import requests
-import json
 
 # General Imports
 import os
@@ -25,7 +24,7 @@ import ctypes
 from platform import platform
 
 # Registry Manipulation
-import _winreg as winreg
+# import _winreg as winreg
 
 # Process Control
 import subprocess
@@ -59,47 +58,13 @@ class TicketDialog:
         self.num = Entry(top)
         self.num.grid(padx=5, row=0, column=1)
 
-        Label(top, text="Description:").grid(row=1, column=0)
-        self.desc = Entry(top)
-        self.desc.grid(padx=5, row=1, column=1)
-
         b = Button(top, text="OK", command=self.ok)
         b.grid(pady=5, columnspan=2)
 
     def ok(self):
         globaldict['ticket_number'] = self.num.get()
-        globaldict['ticket_desc'] = self.desc.get()
 
-        if self.num.get() and self.desc.get():
-            self.top.destroy()
-
-
-# A class encapsulation of the new computer dialog
-
-
-class ComputerDialog:
-    global globaldict
-
-    def __init__(self, parent):
-        top = self.top = Toplevel(parent)
-        self.top.title("New Computer Dialog")
-        self.top.iconbitmap('icon.ico')  # icon is the iconfile
-
-        Label(top, text="Make:").grid(row=0, column=0)
-        self.make = Entry(top)
-        self.make.grid(padx=5, row=0, column=1)
-
-        Label(top, text="Model:").grid(row=1, column=0)
-        self.model = Entry(top)
-        self.model.grid(padx=5, row=1, column=1)
-
-        b = Button(top, text="OK", command=self.ok)
-        b.grid(pady=5, columnspan=2)
-
-    def ok(self):
-        globaldict['computer_make'] = self.make.get()
-        globaldict['computer_model'] = self.model.get()
-        if self.make.get() and self.model.get():
+        if self.num.get():
             self.top.destroy()
 
 
@@ -144,119 +109,25 @@ class ResToolStatusBar(Frame):
         self.ip_text.set(globaldict['ip_addr'])
 
     def set_ticket(self):
-        self.ticket_text.set(globaldict['ticket_number'])
+        self.ticket_text.set("DEBUG")  # replace this
 
 
 # -------------------------------------------------- END GUI Classes ---------------------------------------------------
 
-# --------------------------------------------------- RT-Web Methods ---------------------------------------------------
-def rtw_open():  # runs when ResTool opens to connect to the web client
-    global globaldict
-    try:
-        treg = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, "SOFTWARE\ResTech", 0,
-                              winreg.KEY_ALL_ACCESS)  # open the registry key
-        globaldict['computer_id'] = int(winreg.QueryValueEx(treg, "ComputerID")[0])  # Extract the TicketNo Value
-        try:
-            globaldict['ticket_number'] = int(winreg.QueryValueEx(treg, "TicketNo")[0])  # Extract the TicketNo Value
-            # we have an open ticket and computerID. Update status to idle
-            rtw_status()
-        except WindowsError:
-            # we have a computer ID but no open ticket, open one
-            td = TicketDialog(root)
-            root.wait_window(td.top)
+# ---------------------------------------------------- API Classes -----------------------------------------------------
+def status(text):
+    return text
 
-            answer = requests.post(API_BASE + 'sign_in/',
-                                   {'token': CURRENT_TOKEN, 'type': 'return', 'computer_id': globaldict['computer_id'],
-                                    'ticket_number': globaldict['ticket_number'],
-                                    'ticket_desc': globaldict['ticket_desc'],
-                                    'computer_address': globaldict['ip_addr']})
-            answer_dict = json.loads(answer.text)
-            # verify success
-            try:
-                assert 'success' in answer_dict and answer_dict['success']
-                treg = winreg.CreateKeyEx(winreg.HKEY_LOCAL_MACHINE, "SOFTWARE\\ResTech", 0, winreg.KEY_ALL_ACCESS)
-                winreg.SetValueEx(treg, "TicketNo", 0, winreg.REG_SZ, globaldict['ticket_number'])
-            except AssertionError:
-                print answer.text
 
-    except WindowsError:
-        # we have no info. Get everything.
-        td = TicketDialog(root)
-        root.wait_window(td.top)
+def action(text):
+    return text
 
-        cd = ComputerDialog(root)
-        root.wait_window(cd.top)
 
-        # connect to the server to get computer ID
-        answer = requests.post(API_BASE + 'sign_in/',
-                               {'token': CURRENT_TOKEN, 'type': 'new', 'computer_make': globaldict['computer_make'],
-                                'computer_model': globaldict['computer_model'],
-                                'ticket_number': globaldict['ticket_number'], 'ticket_desc': globaldict['ticket_desc'],
-                                'computer_address': globaldict['ip_addr']})
-        answer_dict = json.loads(answer.text)
-        # verify success
-        try:
-            assert 'success' in answer_dict and answer_dict['success'] == True
-            treg = winreg.CreateKeyEx(winreg.HKEY_LOCAL_MACHINE, "SOFTWARE\\ResTech", 0, winreg.KEY_ALL_ACCESS)
-            globaldict['computer_id'] = answer_dict['computer_id']
-            winreg.SetValueEx(treg, "TicketNo", 0, winreg.REG_SZ, globaldict['ticket_number'])
-            winreg.SetValueEx(treg, "ComputerID", 0, winreg.REG_SZ, str(globaldict['computer_id']))
-        except AssertionError:
-            print answer.text
-
-            # add to the thing
+def stop():
     return 0
 
 
-def rtw_status(status='Idle. Waiting for user input...', status_code=0):  # runs when a status needs updating
-    response = requests.post(API_BASE + 'status/',
-                             {'token': CURRENT_TOKEN, 'computer_id': globaldict['computer_id'],
-                              'computer_address': globaldict['ip_addr'],
-                              'status_code': status_code, 'status_comm': status})
-    try:
-        assert json.loads(response.text)['success']
-    except AssertionError:
-        print response.text
-    return 0
-
-
-def rtw_action(action_app, action_result, status=None, status_code=4):  # runs when an action needs updating
-    if not status:
-        status = "Action or Action Sequence Completed with finished execution of " + action_app
-    response = requests.post(API_BASE + 'action/',
-                             {'token': CURRENT_TOKEN, 'computer_id': globaldict['computer_id'],
-                              'ticket_number': globaldict['ticket_number'], 'action_app': action_app,
-                              'action_res': action_result, 'status_code': status_code, 'status_comm': status})
-    try:
-        assert json.loads(response.text)['success']
-    except AssertionError:
-        print response.text
-    return 0
-
-
-def rtw_exit(reason="at the request of the user"):  # runs when ResTool is about to exit
-    rtw_status("ResTool was closed " + reason + '.', 3)
-    reactor.stop()
-    return 0
-
-
-def rtw_close():  # runs when ResTool is closing a ticket
-    # delete the ticket key from the registry
-    treg = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, "SOFTWARE\ResTech", 0, winreg.KEY_ALL_ACCESS)
-    winreg.DeleteValue(treg, "TicketNo")
-    # remove scanners
-    closetext = rem_scans()
-    if not closetext:
-        closetext = "Ticket closed successfully, but no specific information available."
-    # close the ticket on server
-    response = requests.post(API_BASE + 'close/',
-                             {'token': CURRENT_TOKEN, 'computer_id': globaldict['computer_id'],
-                              'ticket_number': globaldict['ticket_number'], 'close_log': closetext})
-    try:
-        assert json.loads(response.text)['success']
-    except AssertionError:
-        print response.text
-    reactor.stop()
+def close():
     return 0
 
 
@@ -269,15 +140,15 @@ def app_defer(function, name):
     root_progressbar.config(mode='indeterminate')
     root_progressbar.start()
     d = threads.deferToThread(function)
-    rtw_status("Running " + name, 1)
+    status("Running " + name)
     d.addCallbacks(app_callback, app_errback, callbackArgs=(name,), errbackArgs=(name,))
     return 0
 
 
 # Called on app success
-def app_callback(return_text, name):
+def app_callback(return_text):
     # update Action
-    rtw_action(name, return_text)
+    action(return_text)
     # reset GUI
     root_progressbar_label.configure(text="Ready for adventure...")
     root_progressbar.config(mode='indeterminate')
@@ -287,8 +158,7 @@ def app_callback(return_text, name):
 # Called on app error
 def app_errback(error, name):
     # update status
-    rtw_status("While running " + str(name) + ", ResTool encountered the following error:\n" + error.getErrorMessage(),
-               2)  # status_code 2 => ERROR
+    status("While running " + str(name) + ", ResTool encountered the following error:\n" + error.getErrorMessage())
     # set GUI components
     red_status_area()
     root_progressbar_label.configure(text="Error in " + name)
@@ -314,6 +184,7 @@ def run_mwb_defer():
 
 def run_eset():
     import time
+
     time.sleep(60)
     return 0
 
@@ -405,7 +276,7 @@ def run_ticket():
 
 
 def run_ipconfig():
-    rtw_status("IPConfig Reset will cause this machine to become temporarily unreachable", 3)
+    status("IPConfig Reset will cause this machine to become temporarily unreachable")
     subprocess.call(['ipconfig.exe', '/release'])
     subprocess.call(['ipconfig.exe', '/flushdns'])
     subprocess.call(['ipconfig.exe', '/renew'])
@@ -417,7 +288,7 @@ def run_ipconfig_defer():
 
 
 def run_winsock():
-    rtw_status("Winsock Reset requires a restart; this machine will be unreachable until the restart has completed", 3)
+    status("Winsock Reset requires a restart; this machine will be unreachable until the restart has completed")
     subprocess.call(['netsh.exe', 'int', 'ip', 'reset'])
     subprocess.call(['netsh.exe', 'winsock', 'reset'])
     subprocess.call(['netsh.exe', 'winsock', 'reset', 'catalog'])
@@ -538,12 +409,12 @@ def run_awp_defer():
 
 # noinspection PyClassHasNoInit
 class ResToolWebResponder(Protocol):
-    funcMap = {'A': rtw_status, 'B': run_cf, 'C': run_mwb, 'D': run_eset, 'E': run_sas, 'F': run_sb, 'G': run_hc,
+    funcMap = {'A': status, 'B': run_cf, 'C': run_mwb, 'D': run_eset, 'E': run_sas, 'F': run_sb, 'G': run_hc,
                'H': run_cc, 'I': run_sfc, 'J': rem_scans, 'K': msc_toggle, 'L': run_mwbar, 'M': run_tdss, 'N': get_mse,
                'O': run_pnf, 'P': run_temp, 'Q': run_ticket, 'R': run_ipconfig, 'S': run_winsock, 'T': run_hidapters,
                'U': run_wifi, 'V': run_speed, 'W': run_netcpl, 'X': run_dism, 'Y': run_aio, 'Z': run_defrag,
-               'a': run_chkdsk, 'b': run_dmc, 'c': rem_mse, 'd': run_cpl, 'e': run_reg, 'f': run_awp, 'g': rtw_exit,
-               'h': rtw_close}
+               'a': run_chkdsk, 'b': run_dmc, 'c': rem_mse, 'd': run_cpl, 'e': run_reg, 'f': run_awp, 'g': stop,
+               'h': close}
     nameMap = {'B': "ComboFix", 'C': "Malwarebytes", 'D': "ESET", 'E': "SuperAntiSpyware", 'F': "Spybot",
                'G': "TrendMicro HouseCall", 'H': "CCleaner", 'I': "System File Checker",
                'L': "Malwarebytes AntiRootkit", 'M': "Kaspersky TDSSKiller", 'N': "Windows Defender Install",
@@ -564,7 +435,6 @@ class ResToolWebResponder(Protocol):
 class ResToolWebResponderFactory(Factory):
     def buildProtocol(self, addr):
         return ResToolWebResponder()
-
 
 # ---------------------------------------------------- Main Program ----------------------------------------------------
 
@@ -597,7 +467,6 @@ def default_status_area():
     root_empty_space.configure(style="TFrame")
     root_progressbar_label.configure(style="TLabel")
     root.configure(background='SystemButtonFace')  # Discovered this is the default background color
-
 
 # --Main Notebook
 root_notebook = Notebook(root)
@@ -737,10 +606,9 @@ root_progressbar_label.grid(row=3)
 status_bar = ResToolStatusBar(root)  # create a status bar class object
 status_bar.grid(row=4, sticky=E + W)  # put it on da board
 
-rtw_open()
 status_bar.set_ticket()
 
-root.protocol('WM_DELETE_WINDOW', rtw_exit)  # bind the close
+root.protocol('WM_DELETE_WINDOW', reactor.stop)  # bind the close
 
 endpoint = TCP4ServerEndpoint(reactor, 8000)
 
