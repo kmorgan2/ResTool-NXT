@@ -24,17 +24,27 @@ import ctypes
 from platform import platform
 
 # Registry Manipulation
-# import _winreg as winreg
+import _winreg as reg
 
 # Process Control
 import subprocess
 
-# Globals
-CURRENT_TOKEN = "2mD1O0ArdYRewnxCsjz7jR/NWOJnla98fmUCCFkxXU5bkBONiF0IekS6MY7bIZfp"
-API_BASE_AUTODETECT = str("http://" + requests.get("http://restool-ip-kmorgan2.c9users.io/").text + "/api/")
-API_BASE = API_BASE_AUTODETECT
-globaldict = {}  # This is a horrible thing and I should not be doing it
+# THE ALMIGHTY DEBUG FLAG. SET THIS TO TRUE WITH GREAT CAUTION
+DEBUG = True
+# THE LESS ALMIGHTY NO_POST FLAG. SET THIS TO TRUE UNTIL WE GET OUR API ENDPOINTS AND DEV ACCESS
+NO_POST = True
 
+# Globals
+API_HOST = 'intranet'
+if DEBUG:
+    API_HOST = 'dev'
+API_BASE = "http://" + API_HOST + ".restech.niu.edu/tickets/api/restool"
+API_HEARTBEATS = API_BASE + "/heartbeats"
+API_EVENTS = API_BASE + "/events"
+API_TOKENS = API_BASE + "/token"
+EXPIRE_SECONDS = 30
+heartbeat = "Idle"
+token = None
 # Check for Admin
 if not ctypes.windll.shell32.IsUserAnAdmin():
     ctypes.windll.user32.MessageBoxW(0, u"Please make sure to run ResTool with Administrator rights.",
@@ -47,14 +57,12 @@ if not ctypes.windll.shell32.IsUserAnAdmin():
 
 # A class encapsulation of the ticket creation dialog
 class TicketDialog:
-    global globaldict
-
     def __init__(self, parent):
         top = self.top = Toplevel(parent)
         self.top.title("New Ticket Dialog")
-        self.top.iconbitmap('icon.ico')  # icon is the iconfile
+        self.top.iconbitmap('icon.ico')  # icon is icon
 
-        Label(top, text="Ticket Number:").grid(row=0, column=0)
+        Label(top, text="Token:").grid(row=0, column=0)
         self.num = Entry(top)
         self.num.grid(padx=5, row=0, column=1)
 
@@ -62,10 +70,11 @@ class TicketDialog:
         b.grid(pady=5, columnspan=2)
 
     def ok(self):
-        globaldict['ticket_number'] = self.num.get()
-
+        global token
         if self.num.get():
             self.top.destroy()
+            token = self.num.get()
+            set_token(token)
 
 
 # A class encapsulation of the status bar
@@ -85,10 +94,10 @@ class ResToolStatusBar(Frame):
         self.set_ip()
         self.ip_label = Label(self, textvariable=self.ip_text, borderwidth=1, relief=SUNKEN)
         self.ip_label.pack(side=LEFT, fill=X, expand=True)
-        # Display ticket in rightmost box
-        self.ticket_text = StringVar(value="No Ticket")
-        self.ticket_label = Label(self, textvariable=self.ticket_text, anchor=W, borderwidth=1, relief=SUNKEN)
-        self.ticket_label.pack(side=LEFT, fill=X, expand=True)
+        # Display token in rightmost box
+        self.token_text = StringVar(value="No Ticket")
+        self.token_label = Label(self, textvariable=self.token_text, anchor=W, borderwidth=1, relief=SUNKEN)
+        self.token_label.pack(side=LEFT, fill=X, expand=True)
 
     def set_version(self):
         try:
@@ -100,34 +109,109 @@ class ResToolStatusBar(Frame):
         self.version_text.set(value)
 
     def set_ip(self):
-        # gets the valid hostname of this machine (stole this code)
-        global globaldict
-        globaldict['ip_addr'] = [l for l in (
+        # gets the valid hostname of this machine (borrowed this code from stack overflow)
+        ip_address = [l for l in (
             [ip for ip in socket.gethostbyname_ex(socket.gethostname())[2] if not ip.startswith("127.")][:1], [
                 [(soc.connect(('8.8.8.8', 80)), soc.getsockname()[0], soc.close()) for soc in
                  [socket.socket(socket.AF_INET, socket.SOCK_DGRAM)]][0][1]]) if l][0][0]
-        self.ip_text.set(globaldict['ip_addr'])
+        self.ip_text.set(ip_address)
 
-    def set_ticket(self):
-        self.ticket_text.set("DEBUG")  # replace this
+    def set_token(self):
+        self.token_text.set(get_token())
 
 
 # -------------------------------------------------- END GUI Classes ---------------------------------------------------
 
+
+# ----------------------------------------------- Registry Manipulation ------------------------------------------------
+def open_registry(w=False):
+    try:
+        r = reg.OpenKey(reg.HKEY_LOCAL_MACHINE, "Software\\ResTech\\", 0, reg.KEY_ALL_ACCESS if w else reg.KEY_READ)
+    except (WindowsError, KeyError):  # The ResTech Key in the registry does not exist. Create and return accordingly
+        r = reg.CreateKeyEx(reg.HKEY_LOCAL_MACHINE, "Software\\ResTech\\", 0, reg.KEY_ALL_ACCESS if w else reg.KEY_READ)
+    return r
+
+
+def get_token():
+    try:
+        r = str(reg.QueryValueEx(open_registry(), "token")[0])
+    except (WindowsError, KeyError):  # The Token Value in the ResTech does not exist. Return placeholder text.
+        r = "No Token"
+    return r
+
+
+def set_token(value):
+    try:
+        reg.SetValueEx(open_registry(True), "token", 0, reg.REG_SZ, value)
+    except (WindowsError, KeyError):  # This should be impossible. If it happens, something has gone wrong
+        ctypes.windll.user32.MessageBoxW(0, u'Unrecoverable error in writing token to registry.', u'Registry Error', 16)
+
+
+def delete_registry():
+    try:
+        reg.DeleteKey(reg.HKEY_LOCAL_MACHINE, "Software\\ResTech\\")
+    except (WindowsError, KeyError):  # This should be impossible. If it happens, something has gone wrong
+        ctypes.windll.user32.MessageBoxW(0, u'Unrecoverable error in removing ResTech registry data.',
+                                         u'Registry Error', 16)
+
+
 # ---------------------------------------------------- API Classes -----------------------------------------------------
-def status(text):
-    return text
+def update_heartbeat(text):
+    global heartbeat
+    heartbeat = text
+    post_heartbeat()
 
 
-def action(text):
-    return text
-
-
-def stop():
+def post_heartbeat():
+    if not NO_POST:
+        response = requests.post(API_HEARTBEATS,
+                                 {'token': token, 'status': heartbeat, 'expire_seconds': EXPIRE_SECONDS})
+        try:
+            assert response.status_code == 200
+        except AssertionError:  # Error posting the heartbeat
+            if response.status_code == 401:  # Bad token
+                return 401  # Specific handling later
+            elif response.status_code == 400:  # Bad status or expire_seconds
+                return 400  # Specific handling later
+            else:  # Uncaught (500, 404, etc)
+                return response.status_code
     return 0
 
 
-def close():
+def post_event(text):
+    if not NO_POST:
+        response = requests.post(API_EVENTS, {'token': token, 'text': text})
+        try:
+            assert response.status_code == 200
+        except AssertionError:  # Error posting the event
+            if response.status_code == 401:  # Bad token
+                return 401  # Specific handling later
+            elif response.status_code == 400:  # Bad text
+                return 400  # Specific handling later
+            else:  # Uncaught (500, 404, etc)
+                return response.status_code
+    return 0
+
+
+def stop():
+    update_heartbeat("ResTool was closed at the request of the user.")
+    reactor.stop()
+    return 0
+
+
+def invalidate_token():
+    delete_registry()
+    if not NO_POST:
+        response = requests.post(API_EVENTS, {'token': token, 'action': 'invalidate'})
+        try:
+            assert response.status_code == 200
+        except AssertionError:  # Error posting the event
+            if response.status_code == 401:  # Bad token
+                return 401  # Specific handling later
+            elif response.status_code == 400:  # Bad text
+                return 400  # Specific handling later
+            else:  # Uncaught (500, 404, etc)
+                return response.status_code
     return 0
 
 
@@ -140,7 +224,7 @@ def app_defer(function, name):
     root_progressbar.config(mode='indeterminate')
     root_progressbar.start()
     d = threads.deferToThread(function)
-    status("Running " + name)
+    update_heartbeat("Running " + name)
     d.addCallbacks(app_callback, app_errback, callbackArgs=(name,), errbackArgs=(name,))
     return 0
 
@@ -148,7 +232,7 @@ def app_defer(function, name):
 # Called on app success
 def app_callback(return_text):
     # update Action
-    action(return_text)
+    post_event(return_text)
     # reset GUI
     root_progressbar_label.configure(text="Ready for adventure...")
     root_progressbar.config(mode='indeterminate')
@@ -158,7 +242,7 @@ def app_callback(return_text):
 # Called on app error
 def app_errback(error, name):
     # update status
-    status("While running " + str(name) + ", ResTool encountered the following error:\n" + error.getErrorMessage())
+    post_event("While running " + str(name) + ", ResTool encountered an error:\n" + error.getErrorMessage())
     # set GUI components
     red_status_area()
     root_progressbar_label.configure(text="Error in " + name)
@@ -276,7 +360,7 @@ def run_ticket():
 
 
 def run_ipconfig():
-    status("IPConfig Reset will cause this machine to become temporarily unreachable")
+    update_heartbeat("IPConfig Reset will cause this machine to become temporarily unreachable")
     subprocess.call(['ipconfig.exe', '/release'])
     subprocess.call(['ipconfig.exe', '/flushdns'])
     subprocess.call(['ipconfig.exe', '/renew'])
@@ -288,7 +372,7 @@ def run_ipconfig_defer():
 
 
 def run_winsock():
-    status("Winsock Reset requires a restart; this machine will be unreachable until the restart has completed")
+    update_heartbeat("Winsock Reset requires a restart; this machine may be unreachable until the restart is complete.")
     subprocess.call(['netsh.exe', 'int', 'ip', 'reset'])
     subprocess.call(['netsh.exe', 'winsock', 'reset'])
     subprocess.call(['netsh.exe', 'winsock', 'reset', 'catalog'])
@@ -409,12 +493,12 @@ def run_awp_defer():
 
 # noinspection PyClassHasNoInit
 class ResToolWebResponder(Protocol):
-    funcMap = {'A': status, 'B': run_cf, 'C': run_mwb, 'D': run_eset, 'E': run_sas, 'F': run_sb, 'G': run_hc,
+    funcMap = {'A': update_heartbeat, 'B': run_cf, 'C': run_mwb, 'D': run_eset, 'E': run_sas, 'F': run_sb, 'G': run_hc,
                'H': run_cc, 'I': run_sfc, 'J': rem_scans, 'K': msc_toggle, 'L': run_mwbar, 'M': run_tdss, 'N': get_mse,
                'O': run_pnf, 'P': run_temp, 'Q': run_ticket, 'R': run_ipconfig, 'S': run_winsock, 'T': run_hidapters,
                'U': run_wifi, 'V': run_speed, 'W': run_netcpl, 'X': run_dism, 'Y': run_aio, 'Z': run_defrag,
                'a': run_chkdsk, 'b': run_dmc, 'c': rem_mse, 'd': run_cpl, 'e': run_reg, 'f': run_awp, 'g': stop,
-               'h': close}
+               'h': invalidate_token}
     nameMap = {'B': "ComboFix", 'C': "Malwarebytes", 'D': "ESET", 'E': "SuperAntiSpyware", 'F': "Spybot",
                'G': "TrendMicro HouseCall", 'H': "CCleaner", 'I': "System File Checker",
                'L': "Malwarebytes AntiRootkit", 'M': "Kaspersky TDSSKiller", 'N': "Windows Defender Install",
@@ -436,14 +520,15 @@ class ResToolWebResponderFactory(Factory):
     def buildProtocol(self, addr):
         return ResToolWebResponder()
 
+
 # ---------------------------------------------------- Main Program ----------------------------------------------------
 
 # GUI creation (main program initialization)
 
 root = Tk()  # create root window
 tksupport.install(root)  # bind the GUI to a twisted reactor
-root.protocol('WM_DELETE_WINDOW', None)  # bind the close
-root.iconbitmap('icon.ico')
+root.protocol('WM_DELETE_WINDOW', None)  # unbind the close
+root.iconbitmap('icon.ico')  # icon is icon
 root.title("ResTool NXT 2.0: Beta?")  # title is title
 root.resizable(0, 0)  # prevent resize
 
@@ -467,6 +552,7 @@ def default_status_area():
     root_empty_space.configure(style="TFrame")
     root_progressbar_label.configure(style="TLabel")
     root.configure(background='SystemButtonFace')  # Discovered this is the default background color
+
 
 # --Main Notebook
 root_notebook = Notebook(root)
@@ -548,7 +634,7 @@ os_troubleshooting__left.pack(side=LEFT, expand=True, fill=X, pady=5)
 # ------Middle Third
 os_troubleshooting__center = Frame(tab__os_troubleshooting, style='White.TFrame')
 system_group = LabelFrame(os_troubleshooting__center, text="System")
-sfc2_button = Button(system_group, text="SsFC", command=run_sfc_defer, state=DISABLED)
+sfc2_button = Button(system_group, text="SFC", command=run_sfc_defer, state=DISABLED)
 sfc2_button.pack(padx=5, pady=5, fill=X)
 dism_button = Button(system_group, text="DISM", command=run_dism_defer, state=DISABLED)
 dism_button.pack(padx=5, pady=5, fill=X)
@@ -567,7 +653,7 @@ os_troubleshooting__right = Frame(tab__os_troubleshooting, style='White.TFrame')
 miscellaneous_group = LabelFrame(os_troubleshooting__right, text="Miscellaneous")
 rmse_button = Button(miscellaneous_group, text="Remove MSE", command=rem_mse_defer, state=DISABLED)
 rmse_button.pack(padx=5, pady=5, fill=X)
-cpl_button = Button(miscellaneous_group, text="Control Panel", command=run_cpl, state=DISABLED)
+cpl_button = Button(miscellaneous_group, text="Control Panel", command=run_cpl)
 cpl_button.pack(padx=5, pady=5, fill=X)
 reg_button = Button(miscellaneous_group, text="Registry", command=run_reg)
 reg_button.pack(padx=5, pady=5, fill=X)
@@ -606,9 +692,9 @@ root_progressbar_label.grid(row=3)
 status_bar = ResToolStatusBar(root)  # create a status bar class object
 status_bar.grid(row=4, sticky=E + W)  # put it on da board
 
-status_bar.set_ticket()
+status_bar.set_token()
 
-root.protocol('WM_DELETE_WINDOW', reactor.stop)  # bind the close
+root.protocol('WM_DELETE_WINDOW', stop)  # bind the close
 
 endpoint = TCP4ServerEndpoint(reactor, 8000)
 
