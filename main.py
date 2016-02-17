@@ -44,20 +44,48 @@ API_EVENTS = API_BASE + "/events"
 API_TOKENS = API_BASE + "/token"
 EXPIRE_SECONDS = 30
 heartbeat = "Idle"
-token = None
 # Check for Admin
 if not ctypes.windll.shell32.IsUserAnAdmin():
     ctypes.windll.user32.MessageBoxW(0, u"Please make sure to run ResTool with Administrator rights.",
                                      u"Admin Required!", 16)
     sys.exit()
 
+# ------------------------------------------------------ GUI Init ------------------------------------------------------
+
+root = Tk()  # create root window
+tksupport.install(root)  # bind the GUI to a twisted reactor
+root.protocol('WM_DELETE_WINDOW', None)  # unbind the close
+root.iconbitmap('icon.ico')  # icon is icon
+root.title("ResTool NXT 2.0: Beta?")  # title is title
+root.resizable(0, 0)  # prevent resize
+
+# Create necessary styles
+s = Style()
+s.configure('White.TFrame', background='white')
+s.configure('TLabelframe', background='white')
+s.configure('TLabelframe.Label', background='white')
+s.configure('Red.TFrame', background='red')
+s.configure('Red.TLabel', foreground='white', background='red')
+
+
+# And style modifiers
+def red_status_area():
+    root_empty_space.configure(style="Red.TFrame")
+    root_progressbar_label.configure(style="Red.TLabel")
+    root.config(background='red')
+
+
+def default_status_area():
+    root_empty_space.configure(style="TFrame")
+    root_progressbar_label.configure(style="TLabel")
+    root.configure(background='SystemButtonFace')  # Discovered this is the default background color
 
 # ---------------------------------------------------- GUI Classes -----------------------------------------------------
 
-
-# A class encapsulation of the ticket creation dialog
-class TicketDialog:
+# A class encapsulation of the token dialog
+class TokenDialog:
     def __init__(self, parent):
+        self.token = None
         top = self.top = Toplevel(parent)
         self.top.title("New Ticket Dialog")
         self.top.iconbitmap('icon.ico')  # icon is icon
@@ -70,11 +98,12 @@ class TicketDialog:
         b.grid(pady=5, columnspan=2)
 
     def ok(self):
-        global token
         if self.num.get():
+            self.token = self.num.get()
             self.top.destroy()
-            token = self.num.get()
-            set_token(token)
+
+    def get_token(self):
+        return self.token
 
 
 # A class encapsulation of the status bar
@@ -98,6 +127,7 @@ class ResToolStatusBar(Frame):
         self.token_text = StringVar(value="No Ticket")
         self.token_label = Label(self, textvariable=self.token_text, anchor=W, borderwidth=1, relief=SUNKEN)
         self.token_label.pack(side=LEFT, fill=X, expand=True)
+        self.set_token()
 
     def set_version(self):
         try:
@@ -117,42 +147,62 @@ class ResToolStatusBar(Frame):
         self.ip_text.set(ip_address)
 
     def set_token(self):
-        self.token_text.set(get_token())
+        self.token_text.set(token_manager.get_token())
 
 
-# -------------------------------------------------- END GUI Classes ---------------------------------------------------
-
-
-# ----------------------------------------------- Registry Manipulation ------------------------------------------------
+# ---------------------------------------------------- Token Class -----------------------------------------------------
 def open_registry(w=False):
     try:
         r = reg.OpenKey(reg.HKEY_LOCAL_MACHINE, "Software\\ResTech\\", 0, reg.KEY_ALL_ACCESS if w else reg.KEY_READ)
-    except (WindowsError, KeyError):  # The ResTech Key in the registry does not exist. Create and return accordingly
-        r = reg.CreateKeyEx(reg.HKEY_LOCAL_MACHINE, "Software\\ResTech\\", 0, reg.KEY_ALL_ACCESS if w else reg.KEY_READ)
+    except (
+            WindowsError, KeyError):  # The ResTech Key in the registry does not exist. Create and return accordingly
+        r = reg.CreateKeyEx(reg.HKEY_LOCAL_MACHINE, "Software\\ResTech\\", 0,
+                            reg.KEY_ALL_ACCESS if w else reg.KEY_READ)
     return r
 
 
-def get_token():
-    try:
-        r = str(reg.QueryValueEx(open_registry(), "token")[0])
-    except (WindowsError, KeyError):  # The Token Value in the ResTech does not exist. Return placeholder text.
-        r = "No Token"
-    return r
+# A class to manage the token, saving and reading from the registry, and handling no-token occurrences
+class Token:
+    def __init__(self, token=None):
+        self.token = token
+        if not self.token:  # try to get it from the registry
+            self.get_token()
+        if not self.token:  # try to get it from the user
+            td = TokenDialog(root)
+            root.wait_window(td.top)
+            self.set_token(td.get_token())
+
+    def get_token(self):
+        if not self.token:
+            try:
+                self.token = str(reg.QueryValueEx(open_registry(), "token")[0])
+            except (WindowsError, KeyError):  # The Token Value in the ResTech does not exist. Return placeholder text.
+                self.token = None
+        if self.token:
+            return self.token
+
+    def set_token(self, value):
+        self.token = value
+        try:
+            reg.SetValueEx(open_registry(True), "token", 0, reg.REG_SZ, value)
+        except (WindowsError, KeyError):  # This should be impossible. If it happens, something has gone wrong
+            ctypes.windll.user32.MessageBoxW(0, u'Unrecoverable error in writing token to registry.', u'Registry Error',
+                                             16)
+
+    def delete_token(self):
+        self.token = None
+        try:
+            reg.DeleteKey(reg.HKEY_LOCAL_MACHINE, "Software\\ResTech\\")
+        except (WindowsError, KeyError):  # This should be impossible. If it happens, something has gone wrong
+            ctypes.windll.user32.MessageBoxW(0, u'Unrecoverable error in removing ResTech registry data.',
+                                             u'Registry Error', 16)
 
 
-def set_token(value):
-    try:
-        reg.SetValueEx(open_registry(True), "token", 0, reg.REG_SZ, value)
-    except (WindowsError, KeyError):  # This should be impossible. If it happens, something has gone wrong
-        ctypes.windll.user32.MessageBoxW(0, u'Unrecoverable error in writing token to registry.', u'Registry Error', 16)
+token_manager = Token()
 
 
-def delete_registry():
-    try:
-        reg.DeleteKey(reg.HKEY_LOCAL_MACHINE, "Software\\ResTech\\")
-    except (WindowsError, KeyError):  # This should be impossible. If it happens, something has gone wrong
-        ctypes.windll.user32.MessageBoxW(0, u'Unrecoverable error in removing ResTech registry data.',
-                                         u'Registry Error', 16)
+# ----------------------------------------------- Registry Manipulation ------------------------------------------------
+
 
 
 # ---------------------------------------------------- API Classes -----------------------------------------------------
@@ -163,9 +213,10 @@ def update_heartbeat(text):
 
 
 def post_heartbeat():
-    if not NO_POST:
+    if not NO_POST and token_manager.get_token():
         response = requests.post(API_HEARTBEATS,
-                                 {'token': token, 'status': heartbeat, 'expire_seconds': EXPIRE_SECONDS})
+                                 {'token': token_manager.get_token(), 'status': heartbeat,
+                                  'expire_seconds': EXPIRE_SECONDS})
         try:
             assert response.status_code == 200
         except AssertionError:  # Error posting the heartbeat
@@ -179,8 +230,8 @@ def post_heartbeat():
 
 
 def post_event(text):
-    if not NO_POST:
-        response = requests.post(API_EVENTS, {'token': token, 'text': text})
+    if not NO_POST and token_manager.get_token():
+        response = requests.post(API_EVENTS, {'token': token_manager.get_token(), 'text': text})
         try:
             assert response.status_code == 200
         except AssertionError:  # Error posting the event
@@ -200,9 +251,8 @@ def stop():
 
 
 def invalidate_token():
-    delete_registry()
     if not NO_POST:
-        response = requests.post(API_EVENTS, {'token': token, 'action': 'invalidate'})
+        response = requests.post(API_EVENTS, {'token': token_manager.get_token(), 'action': 'invalidate'})
         try:
             assert response.status_code == 200
         except AssertionError:  # Error posting the event
@@ -212,6 +262,7 @@ def invalidate_token():
                 return 400  # Specific handling later
             else:  # Uncaught (500, 404, etc)
                 return response.status_code
+    token_manager.delete_token()
     return 0
 
 
@@ -525,33 +576,7 @@ class ResToolWebResponderFactory(Factory):
 
 # GUI creation (main program initialization)
 
-root = Tk()  # create root window
-tksupport.install(root)  # bind the GUI to a twisted reactor
-root.protocol('WM_DELETE_WINDOW', None)  # unbind the close
-root.iconbitmap('icon.ico')  # icon is icon
-root.title("ResTool NXT 2.0: Beta?")  # title is title
-root.resizable(0, 0)  # prevent resize
 
-# Create necessary styles
-s = Style()
-s.configure('White.TFrame', background='white')
-s.configure('TLabelframe', background='white')
-s.configure('TLabelframe.Label', background='white')
-s.configure('Red.TFrame', background='red')
-s.configure('Red.TLabel', foreground='white', background='red')
-
-
-# And style modifiers
-def red_status_area():
-    root_empty_space.configure(style="Red.TFrame")
-    root_progressbar_label.configure(style="Red.TLabel")
-    root.config(background='red')
-
-
-def default_status_area():
-    root_empty_space.configure(style="TFrame")
-    root_progressbar_label.configure(style="TLabel")
-    root.configure(background='SystemButtonFace')  # Discovered this is the default background color
 
 
 # --Main Notebook
@@ -691,8 +716,6 @@ root_progressbar_label.grid(row=3)
 
 status_bar = ResToolStatusBar(root)  # create a status bar class object
 status_bar.grid(row=4, sticky=E + W)  # put it on da board
-
-status_bar.set_token()
 
 root.protocol('WM_DELETE_WINDOW', stop)  # bind the close
 
