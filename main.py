@@ -15,6 +15,7 @@ from ttk import *
 from twisted.internet import tksupport, reactor, threads
 from twisted.internet.protocol import Protocol, Factory
 from twisted.internet.endpoints import TCP4ServerEndpoint
+from twisted.logger import Logger, jsonFileLogObserver
 import requests
 
 # General Imports
@@ -23,8 +24,9 @@ import socket
 import ctypes
 from platform import platform
 
-# Registry Manipulation
+# Registry and File Manipulation
 import _winreg as reg
+import io
 
 # Process Control
 import subprocess
@@ -34,6 +36,10 @@ DEBUG = True
 # THE LESS ALMIGHTY NO_POST FLAG. SET THIS TO TRUE UNTIL WE GET OUR API ENDPOINTS AND DEV ACCESS
 NO_POST = True
 
+# Logging
+# noinspection PyTypeChecker
+log = Logger(observer=jsonFileLogObserver(io.open(os.path.expanduser("~\Desktop\log.json"), 'a')))
+log.info("Starting ResTool")
 # Globals
 API_HOST = 'intranet'
 if DEBUG:
@@ -42,12 +48,16 @@ API_BASE = "http://" + API_HOST + ".restech.niu.edu/tickets/api/restool"
 API_HEARTBEATS = API_BASE + "/heartbeats"
 API_EVENTS = API_BASE + "/events"
 API_TOKENS = API_BASE + "/token"
+
 EXPIRE_SECONDS = 30
+
 heartbeat = "Idle"
+
 # Check for Admin
 if not ctypes.windll.shell32.IsUserAnAdmin():
     ctypes.windll.user32.MessageBoxW(0, u"Please make sure to run ResTool with Administrator rights.",
                                      u"Admin Required!", 16)
+    log.critical("ResTool was started without admin privileges and was unable to run.")
     sys.exit()
 
 # ------------------------------------------------------ GUI Init ------------------------------------------------------
@@ -79,6 +89,7 @@ def default_status_area():
     root_empty_space.configure(style="TFrame")
     root_progressbar_label.configure(style="TLabel")
     root.configure(background='SystemButtonFace')  # Discovered this is the default background color
+
 
 # ---------------------------------------------------- GUI Classes -----------------------------------------------------
 
@@ -167,10 +178,13 @@ class Token:
         self.token = token
         if not self.token:  # try to get it from the registry
             self.get_token()
+            if self.token:
+                log.info("Retrieved stored token from registry.")
         if not self.token:  # try to get it from the user
             td = TokenDialog(root)
             root.wait_window(td.top)
             self.set_token(td.get_token())
+            log.info("Token {token} recorded from user", token=self.token)
 
     def get_token(self):
         if not self.token:
@@ -178,34 +192,36 @@ class Token:
                 self.token = str(reg.QueryValueEx(open_registry(), "token")[0])
             except (WindowsError, KeyError):  # The Token Value in the ResTech does not exist. Return placeholder text.
                 self.token = None
-        if self.token:
-            return self.token
+                log.error("Attempt to get token when none was initialized or stored.")
+        return self.token
 
     def set_token(self, value):
         self.token = value
         try:
             reg.SetValueEx(open_registry(True), "token", 0, reg.REG_SZ, value)
+            log.info("Recorded new token {token}.", token=self.token)
         except (WindowsError, KeyError):  # This should be impossible. If it happens, something has gone wrong
             ctypes.windll.user32.MessageBoxW(0, u'Unrecoverable error in writing token to registry.', u'Registry Error',
                                              16)
+            log.failure("Registry not in valid state when storing token.")
 
     def delete_token(self):
         self.token = None
         try:
             reg.DeleteKey(reg.HKEY_LOCAL_MACHINE, "Software\\ResTech\\")
+            log.info("Removed recorded token.")
         except (WindowsError, KeyError):  # This should be impossible. If it happens, something has gone wrong
             ctypes.windll.user32.MessageBoxW(0, u'Unrecoverable error in removing ResTech registry data.',
                                              u'Registry Error', 16)
+            log.failure("Registry not in valid state when removing token.")
 
 
 token_manager = Token()
 
 
-# ----------------------------------------------- Registry Manipulation ------------------------------------------------
-
-
-
 # ---------------------------------------------------- API Classes -----------------------------------------------------
+
+
 def update_heartbeat(text):
     global heartbeat
     heartbeat = text
@@ -213,6 +229,7 @@ def update_heartbeat(text):
 
 
 def post_heartbeat():
+    global heartbeat, API_HEARTBEATS
     if not NO_POST and token_manager.get_token():
         response = requests.post(API_HEARTBEATS,
                                  {'token': token_manager.get_token(), 'status': heartbeat,
@@ -221,12 +238,15 @@ def post_heartbeat():
             assert response.status_code == 200
         except AssertionError:  # Error posting the heartbeat
             if response.status_code == 401:  # Bad token
-                return 401  # Specific handling later
+                log.error('Invalid Token {token} when posting heartbeat.', token=token_manager.get_token())
             elif response.status_code == 400:  # Bad status or expire_seconds
-                return 400  # Specific handling later
+                log.error('Invalid data when posting heartbeat "{heartbeat}"', heartbea=heartbeat)
             else:  # Uncaught (500, 404, etc)
-                return response.status_code
-    return 0
+                log.error(
+                    'Uncaught HTTP Error {rc}. token in heartbeats: {t} heartbeat: "{h}" expire_seconds: {e}',
+                    t=token_manager.get_token(), h=heartbeat, e=EXPIRE_SECONDS)
+        return response.status_code
+    return 200
 
 
 def post_event(text):
@@ -236,32 +256,38 @@ def post_event(text):
             assert response.status_code == 200
         except AssertionError:  # Error posting the event
             if response.status_code == 401:  # Bad token
-                return 401  # Specific handling later
+                log.error('Invalid Token {token} when posting event.', token=token_manager.get_token())
             elif response.status_code == 400:  # Bad text
-                return 400  # Specific handling later
+                log.error('Invalid data when posting event "{text}"', text=text)
             else:  # Uncaught (500, 404, etc)
-                return response.status_code
+                log.error('Uncaught HTTP Error {rc} in events: token:{token} event: "{text}"',
+                          token=token_manager.get_token(),
+                          text=text)
+        return response.status_code
     return 0
 
 
 def stop():
     update_heartbeat("ResTool was closed at the request of the user.")
+    log.info("ResTool was closed at the request of the user.")
     reactor.stop()
     return 0
 
 
 def invalidate_token():
     if not NO_POST:
-        response = requests.post(API_EVENTS, {'token': token_manager.get_token(), 'action': 'invalidate'})
+        response = requests.post(API_EVENTS + "/" + token_manager.get_token(), {'action': 'invalidate'})
         try:
             assert response.status_code == 200
         except AssertionError:  # Error posting the event
             if response.status_code == 401:  # Bad token
-                return 401  # Specific handling later
-            elif response.status_code == 400:  # Bad text
-                return 400  # Specific handling later
+                log.error('Invalid Token {token} when invalidating token.', token=token_manager.get_token())
+            elif response.status_code == 400:  # Bad action
+                log.error('Invalid action "invalidate" when invalidating token.')
             else:  # Uncaught (500, 404, etc)
-                return response.status_code
+                log.error('Uncaught HTTP Error {rc} in token: token:{token} action: "invalidate"',
+                          token=token_manager.get_token())
+        return response.status_code
     token_manager.delete_token()
     return 0
 
@@ -270,20 +296,24 @@ def invalidate_token():
 
 # Called to thread-defer a GUI callback.
 def app_defer(function, name):
+    log.info("Running {name}", name=name)
     default_status_area()
     root_progressbar_label.configure(text="Running " + name)
     root_progressbar.config(mode='indeterminate')
     root_progressbar.start()
     d = threads.deferToThread(function)
     update_heartbeat("Running " + name)
-    d.addCallbacks(app_callback, app_errback, callbackArgs=(name,), errbackArgs=(name,))
+    d.addCallbacks(app_callback, app_errback, errbackArgs=(name,))
     return 0
 
 
 # Called on app success
 def app_callback(return_text):
-    # update Action
-    post_event(return_text)
+    if return_text != 0:
+        log.info("Finished. " + return_text)
+        # update Action
+        post_event(return_text)
+        update_heartbeat("Idle")
     # reset GUI
     root_progressbar_label.configure(text="Ready for adventure...")
     root_progressbar.config(mode='indeterminate')
@@ -292,8 +322,10 @@ def app_callback(return_text):
 
 # Called on app error
 def app_errback(error, name):
+    log.failure("Error running {name}", name=name)
     # update status
     post_event("While running " + str(name) + ", ResTool encountered an error:\n" + error.getErrorMessage())
+    update_heartbeat("Error running " + str(name))
     # set GUI components
     red_status_area()
     root_progressbar_label.configure(text="Error in " + name)
@@ -302,7 +334,7 @@ def app_errback(error, name):
 
 
 def run_cf():
-    return "ComboFix performed about a million or so deletions."
+    return 0
 
 
 def run_cf_defer():
@@ -310,7 +342,7 @@ def run_cf_defer():
 
 
 def run_mwb():
-    raise UserWarning('Malwarebytes literally exploded... Good luck cleaning that up.')
+    return 0
 
 
 def run_mwb_defer():
@@ -318,9 +350,6 @@ def run_mwb_defer():
 
 
 def run_eset():
-    import time
-
-    time.sleep(60)
     return 0
 
 
@@ -415,7 +444,7 @@ def run_ipconfig():
     subprocess.call(['ipconfig.exe', '/release'])
     subprocess.call(['ipconfig.exe', '/flushdns'])
     subprocess.call(['ipconfig.exe', '/renew'])
-    return 0
+    return "IPConfig Complete."
 
 
 def run_ipconfig_defer():
@@ -428,10 +457,10 @@ def run_winsock():
     subprocess.call(['netsh.exe', 'winsock', 'reset'])
     subprocess.call(['netsh.exe', 'winsock', 'reset', 'catalog'])
     subprocess.call(['netsh.exe', 'advfirewall', 'reset'])
-    print "Reboot Necessary"
+    print "Reboot Necessary."
     # Set ResTool to run on restart
     # Restart the computer
-    return 0
+    return "Winsock Reset complete. Reboot Necessary."
 
 
 def run_winsock_defer():
@@ -521,10 +550,12 @@ def rem_mse_defer():
 
 def run_cpl():
     subprocess.call(['control.exe'])
+    return 0
 
 
 def run_reg():
     subprocess.call(['regedit.exe'])
+    return 0
 
 
 def run_awp():
@@ -575,9 +606,6 @@ class ResToolWebResponderFactory(Factory):
 # ---------------------------------------------------- Main Program ----------------------------------------------------
 
 # GUI creation (main program initialization)
-
-
-
 
 # --Main Notebook
 root_notebook = Notebook(root)
