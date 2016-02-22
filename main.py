@@ -179,7 +179,7 @@ class Token:
         if not self.token:  # try to get it from the registry
             self.get_token()
             if self.token:
-                log.info("Retrieved stored token from registry.")
+                log.info("Retrieved stored token {token} from registry.", token=self.token)
         if not self.token:  # try to get it from the user
             td = TokenDialog(root)
             root.wait_window(td.top)
