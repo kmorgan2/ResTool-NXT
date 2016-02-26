@@ -54,8 +54,7 @@ EXPIRE_SECONDS = 30
 
 heartbeat = "Idle"
 
-# Check for Admin and disable command redirection
-ctypes.windll.kernel32.Wow64DisableWow64FsRedirection(ctypes.byref(ctypes.c_long(0)))
+# Check for Admin
 if not ctypes.windll.shell32.IsUserAnAdmin():
     ctypes.windll.user32.MessageBoxW(0, u"Please make sure to run ResTool with Administrator rights.",
                                      u"Admin Required!", 16)
@@ -562,7 +561,9 @@ def run_netcpl():
 
 
 def run_sfc():
-    process = subprocess.Popen(["C:\Windows\System32\cmd.exe", "/C", "sfc", "/scannow"], shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags = subprocess.CREATE_NEW_CONSOLE)
+    process = subprocess.Popen(["C:\Windows\System32\cmd.exe", "/C", "sfc", "/scannow"], shell=True,
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                               creationflags=subprocess.CREATE_NEW_CONSOLE)
     process.wait()
     (output, errout) = process.communicate()
     if output:
