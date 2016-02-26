@@ -14,9 +14,10 @@ from ttk import *
 # Network/Web Imports
 from twisted.internet import tksupport, reactor, threads
 from twisted.internet.protocol import Protocol, Factory
-from twisted.internet.endpoints import TCP4ServerEndpoint
-from twisted.logger import Logger, jsonFileLogObserver
+# from twisted.internet.endpoints import TCP4ServerEndpoint
+from twisted.logger import Logger, textFileLogObserver
 import requests
+import webbrowser
 
 # General Imports
 import os
@@ -38,7 +39,7 @@ NO_POST = True
 
 # Logging
 # noinspection PyTypeChecker
-log = Logger(observer=jsonFileLogObserver(io.open(os.path.expanduser("~\Desktop\log.json"), 'a')))
+log = Logger(observer=textFileLogObserver(io.open(os.path.expanduser("~\Desktop\log.txt"), 'a')))
 log.info("Starting ResTool")
 # Globals
 API_HOST = 'intranet'
@@ -53,7 +54,8 @@ EXPIRE_SECONDS = 30
 
 heartbeat = "Idle"
 
-# Check for Admin
+# Check for Admin and disable command redirection
+ctypes.windll.kernel32.Wow64DisableWow64FsRedirection(ctypes.byref(ctypes.c_long(0)))
 if not ctypes.windll.shell32.IsUserAnAdmin():
     ctypes.windll.user32.MessageBoxW(0, u"Please make sure to run ResTool with Administrator rights.",
                                      u"Admin Required!", 16)
@@ -138,7 +140,7 @@ class ResToolStatusBar(Frame):
         self.token_text = StringVar(value="No Ticket")
         self.token_label = Label(self, textvariable=self.token_text, anchor=W, borderwidth=1, relief=SUNKEN)
         self.token_label.pack(side=LEFT, fill=X, expand=True)
-        self.set_token()
+        self.set_ticket()
 
     def set_version(self):
         try:
@@ -157,8 +159,8 @@ class ResToolStatusBar(Frame):
                  [socket.socket(socket.AF_INET, socket.SOCK_DGRAM)]][0][1]]) if l][0][0]
         self.ip_text.set(ip_address)
 
-    def set_token(self):
-        self.token_text.set(token_manager.get_token())
+    def set_ticket(self):
+        self.token_text.set(get_ticket())
 
 
 # ---------------------------------------------------- Token Class -----------------------------------------------------
@@ -180,7 +182,9 @@ class Token:
             self.get_token()
             if self.token:
                 log.info("Retrieved stored token from registry.")
-        if not self.token:  # try to get it from the user
+        if NO_POST and not self.token:  # it's not in the registry, but we are offline
+            self.set_token("Offline")
+        elif not self.token:  # try to get it from the user
             td = TokenDialog(root)
             root.wait_window(td.top)
             self.set_token(td.get_token())
@@ -219,7 +223,49 @@ class Token:
 token_manager = Token()
 
 
-# ---------------------------------------------------- API Classes -----------------------------------------------------
+# -------------------------------------------------- Safe Mode Class ---------------------------------------------------
+class SafeModeTracker:
+    def __init__(self):
+        self.safe_mode_set = False
+        self.get_safe_mode_setting()
+        log.info("On launch, safe mode was {value}.", value="enabled" if self.safe_mode_set else "disabled")
+
+    def get_safe_mode_setting(self):
+        output = subprocess.check_output(["bcdedit", "/enum", "{default}"], shell=True)
+        if "safeboot" in output:
+            self.safe_mode_set = True
+            # Set GUI to reflect safe mode setting
+            msc_button.configure(text="Disable")
+        else:
+            self.safe_mode_set = False
+            msc_button.configure(text="Enable")
+
+    def enable_safe_mode(self):
+        # Modify the BCD Configuration to enable safe boot with networking
+        subprocess.Popen(["bcdedit", "/set", "{default}", "safeboot", "network"], shell=True).wait()
+        self.get_safe_mode_setting()
+        if self.safe_mode_set:
+            log.info("Safe mode has been enabled.")
+        else:
+            log.error("There was an error enabling safe mode.")
+
+    def disable_safe_mode(self):
+        # Modify the BCD Configuration to disable safeboot
+        subprocess.Popen(["bcdedit", "/deletevalue", "{default}", "safeboot"], shell=True).wait()
+        self.get_safe_mode_setting()
+        if not self.safe_mode_set:
+            log.info("Safe mode has been disabled.")
+        else:
+            log.error("There was an error disabling safe mode.")
+
+    def toggle_safe_mode(self):
+        if self.safe_mode_set:
+            self.disable_safe_mode()
+        else:
+            self.enable_safe_mode()
+
+
+# --------------------------------------------------- API Functions ----------------------------------------------------
 
 
 def update_heartbeat(text):
@@ -242,11 +288,10 @@ def post_heartbeat():
             elif response.status_code == 400:  # Bad status or expire_seconds
                 log.error('Invalid data when posting heartbeat "{heartbeat}"', heartbea=heartbeat)
             else:  # Uncaught (500, 404, etc)
-                log.error(
-                    'Uncaught HTTP Error {rc}. token in heartbeats: {t} heartbeat: "{h}" expire_seconds: {e}',
-                    t=token_manager.get_token(), h=heartbeat, e=EXPIRE_SECONDS)
+                log.error('Uncaught HTTP Error {rc}. token in POST heartbeats: with token: {t}, heartbeat:"{h}",' +
+                          'and expire_seconds: {e}', t=token_manager.get_token(), h=heartbeat, e=EXPIRE_SECONDS)
         return response.status_code
-    return 200
+    return "Offline"
 
 
 def post_event(text):
@@ -260,11 +305,11 @@ def post_event(text):
             elif response.status_code == 400:  # Bad text
                 log.error('Invalid data when posting event "{text}"', text=text)
             else:  # Uncaught (500, 404, etc)
-                log.error('Uncaught HTTP Error {rc} in events: token:{token} event: "{text}"',
+                log.error('Uncaught HTTP Error {rc} in POST events: with token:{token} and event: "{text}"',
                           token=token_manager.get_token(),
                           text=text)
         return response.status_code
-    return 0
+    return "Offline"
 
 
 def stop():
@@ -285,14 +330,31 @@ def invalidate_token():
             elif response.status_code == 400:  # Bad action
                 log.error('Invalid action "invalidate" when invalidating token.')
             else:  # Uncaught (500, 404, etc)
-                log.error('Uncaught HTTP Error {rc} in token: token:{token} action: "invalidate"',
+                log.error('Uncaught HTTP Error {rc} in POST token: {token} with action: invalidate',
                           token=token_manager.get_token())
         return response.status_code
     token_manager.delete_token()
-    return 0
+    return "Offline"
+
+
+def get_ticket():
+    if not NO_POST:
+        response = requests.get(API_EVENTS + "/" + token_manager.get_token())
+        try:
+            assert response.status_code == 200
+            ticket = response.json()['ticket']
+            return ticket
+        except AssertionError:
+            if response.status_code == 404:
+                log.error("Invalid Token {token} when getting ticket.")
+            else:
+                log.error("Uncaught HTTP Error {rc} in GET token: {token}")
+            return "No Ticket"
+    return "Offline"
 
 
 # -------------------------------------------------- Callback Methods --------------------------------------------------
+
 
 # Called to thread-defer a GUI callback.
 def app_defer(function, name):
@@ -322,7 +384,7 @@ def app_callback(return_text):
 
 # Called on app error
 def app_errback(error, name):
-    log.failure("Error running {name}", name=name)
+    log.error("Error running {name}\n" + error.getErrorMessage(), name=name)
     # update status
     post_event("While running " + str(name) + ", ResTool encountered an error:\n" + error.getErrorMessage())
     update_heartbeat("Error running " + str(name))
@@ -394,6 +456,7 @@ def rem_scans():
 
 
 def msc_toggle():
+    safe_mode_tracker.toggle_safe_mode()
     return 0
 
 
@@ -436,6 +499,11 @@ def run_temp_defer():
 
 
 def run_ticket():
+    ticket = get_ticket()
+    if ticket not in ["Offline", "No Ticket"]:
+        webbrowser.open("http://" + API_HOST + ".restech.niu.edu/tickets/" + ticket)
+    else:
+        webbrowser.open("http://" + API_HOST + ".restech.niu.edu/tickets")
     return 0
 
 
@@ -484,11 +552,8 @@ def run_wifi_defer():
 
 
 def run_speed():
+    webbrowser.open("http://speedtest.niu.edu")
     return 0
-
-
-def run_speed_defer():
-    app_defer(run_speed, "Speed Test")
 
 
 def run_netcpl():
@@ -497,7 +562,22 @@ def run_netcpl():
 
 
 def run_sfc():
-    return 0
+    process = subprocess.Popen(["C:\Windows\System32\cmd.exe", "/C", "sfc", "/scannow"], shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags = subprocess.CREATE_NEW_CONSOLE)
+    process.wait()
+    (output, errout) = process.communicate()
+    if output:
+        if "did not find any" in output:
+            return "SFC Passed with no corrupt files."
+        elif "could not perform" in output:
+            raise UserWarning("A system error requires SFC to be run in Safe Mode.")
+        elif "successfully repaired them" in output:
+            return "SFC Failed but repaired all corrupt files."
+        elif "unable to fix" in output:
+            return "SFC Failed and could not repair corrupt files."
+        else:
+            raise UserWarning("Uncaught SFC Behavior: \n" + output)
+    else:
+        raise UserWarning("Uncaught SFC Behavior: \n" + errout)
 
 
 def run_sfc_defer():
@@ -634,13 +714,13 @@ virus_scans__center = Frame(tab__virus_scans, style='White.TFrame')
 system_cleanup_group = LabelFrame(virus_scans__center, text="Cleanup")
 cc_button = Button(system_cleanup_group, text="CCleaner", command=run_cc_defer, state=DISABLED)
 cc_button.pack(padx=5, pady=5, fill=X)
-sfc_button = Button(system_cleanup_group, text="SFC", command=run_sfc_defer, state=DISABLED)
+sfc_button = Button(system_cleanup_group, text="SFC", command=run_sfc_defer)
 sfc_button.pack(padx=5, pady=5, fill=X)
 uns_button = Button(system_cleanup_group, text="Rem. Scans", command=rem_scans, state=DISABLED)
 uns_button.pack(padx=5, pady=5, fill=X)
 system_cleanup_group.grid(row=0, sticky=N)
-msconfig_group = LabelFrame(virus_scans__center, text="MSConfig")
-msc_button = Button(msconfig_group, text="Enable", command=msc_toggle, state=DISABLED)
+msconfig_group = LabelFrame(virus_scans__center, text="Safe Mode")
+msc_button = Button(msconfig_group, text="Enable", command=msc_toggle)
 msc_button.pack(padx=5, pady=5, fill=X)
 msconfig_group.grid(row=1, sticky=N)
 virus_scans__center.pack(side=LEFT, expand=True, anchor=N, pady=5, fill=X)
@@ -659,7 +739,7 @@ progs_button = Button(misc_group, text="Prog&Feat", command=run_pnf)
 progs_button.pack(padx=5, pady=5, fill=X)
 tfr_button = Button(misc_group, text="Temp Files", command=run_temp_defer)
 tfr_button.pack(padx=5, pady=5, fill=X)
-tic_button = Button(misc_group, text="Ticket", command=run_ticket, state=DISABLED)
+tic_button = Button(misc_group, text="Ticket", command=run_ticket)
 tic_button.pack(padx=5, pady=5, fill=X)
 misc_group.grid(row=1)
 virus_scans__right.pack(side=LEFT, expand=True, pady=5, fill=X)
@@ -678,7 +758,7 @@ had_button = Button(network_group, text="Hid. Adapters", command=run_hidapters_d
 had_button.pack(padx=5, pady=5, fill=X)
 wzc_button = Button(network_group, text="NIUwireless", command=run_wifi_defer, state=DISABLED)
 wzc_button.pack(padx=5, pady=5, fill=X)
-sts_button = Button(network_group, text="Speedtest", command=run_speed_defer, state=DISABLED)
+sts_button = Button(network_group, text="Speedtest", command=run_speed)
 sts_button.pack(padx=5, pady=5, fill=X)
 ncp_button = Button(network_group, text="Network Cpl.", command=run_netcpl)
 ncp_button.pack(padx=5, pady=5, fill=X)
@@ -687,7 +767,7 @@ os_troubleshooting__left.pack(side=LEFT, expand=True, fill=X, pady=5)
 # ------Middle Third
 os_troubleshooting__center = Frame(tab__os_troubleshooting, style='White.TFrame')
 system_group = LabelFrame(os_troubleshooting__center, text="System")
-sfc2_button = Button(system_group, text="SFC", command=run_sfc_defer, state=DISABLED)
+sfc2_button = Button(system_group, text="SFC", command=run_sfc_defer)
 sfc2_button.pack(padx=5, pady=5, fill=X)
 dism_button = Button(system_group, text="DISM", command=run_dism_defer, state=DISABLED)
 dism_button.pack(padx=5, pady=5, fill=X)
@@ -745,9 +825,11 @@ root_progressbar_label.grid(row=3)
 status_bar = ResToolStatusBar(root)  # create a status bar class object
 status_bar.grid(row=4, sticky=E + W)  # put it on da board
 
+safe_mode_tracker = SafeModeTracker()
+
 root.protocol('WM_DELETE_WINDOW', stop)  # bind the close
 
-endpoint = TCP4ServerEndpoint(reactor, 8000)
+'''endpoint = TCP4ServerEndpoint(reactor, 8000)
 
 
 def listen():
@@ -760,12 +842,13 @@ def listen():
                                          "and no other services are using port 8000.\n" +
                                          "Restool will now terminate.",
                                          u"Network Conflict!", 16)
+        log.critical("ResTool was unable to bind to the correct network port.")
         reactor.stop()
 
     d.addErrback(listen_failed)
 
 
-reactor.callWhenRunning(listen)
+reactor.callWhenRunning(listen)'''  # This is code for the remote functionality, which I will leave for future use
 # noinspection PyUnresolvedReferences
 reactor.run()
 # -------------------------------------------------- End Main Program --------------------------------------------------
