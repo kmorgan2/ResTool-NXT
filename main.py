@@ -561,12 +561,9 @@ def run_netcpl():
 
 
 def run_sfc():
-    process = subprocess.Popen(["C:\Windows\System32\cmd.exe", "/C", "sfc", "/scannow"], shell=True,
-                               stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                               creationflags=subprocess.CREATE_NEW_CONSOLE)
-    process.wait()
-    (output, errout) = process.communicate()
-    if output:
+    try:
+        output = subprocess.check_output("sfc /scannow")
+        output = ''.join(ch for ch in output if ch not in ['x00', 'x08'])
         if "did not find any" in output:
             return "SFC Passed with no corrupt files."
         elif "could not perform" in output:
@@ -576,9 +573,9 @@ def run_sfc():
         elif "unable to fix" in output:
             return "SFC Failed and could not repair corrupt files."
         else:
-            raise UserWarning("Uncaught SFC Behavior: \n" + output)
-    else:
-        raise UserWarning("Uncaught SFC Behavior: \n" + errout)
+            raise UserWarning("Uncaught SFC Behavior: \n" + ''.join(ch for ch in output if ch not in ['x00', 'x08']))
+    except subprocess.CalledProcessError as e:
+        raise UserWarning("Uncaught SFC Behavior: \n" + ''.join(ch for ch in e.output if ch not in ['x00', 'x08']))
 
 
 def run_sfc_defer():
@@ -586,7 +583,15 @@ def run_sfc_defer():
 
 
 def run_dism():
-    return 0
+    try:
+        output = subprocess.check_output("dism /Online /Cleanup-Image /RestoreHealth")
+        output = ''.join(ch for ch in output if ch not in ['x00', 'x08'])
+        if "The restore operation completed successfully." in output:
+            return "DISM Successfully verified and/or made repairs."
+        else:
+            raise UserWarning("DISM Failed:\n" + ''.join(ch for ch in output if ch not in ['x00', 'x08']))
+    except subprocess.CalledProcessError as e:
+        raise UserWarning("Uncaught DISM Behavior: \n" + ''.join(ch for ch in e.output if ch not in ['x00', 'x08']))
 
 
 def run_dism_defer():
@@ -610,7 +615,16 @@ def run_defrag_defer():
 
 
 def run_chkdsk():
-    return 0
+    try:
+        output = subprocess.check_output("chkdsk")
+        output = ''.join(ch for ch in output if ch not in ['x00', 'x08'])
+        if "found no problems." in output:
+            return "CHKDSK found no errors"
+        else:
+            subprocess.call("fsutil set dirty")
+            return "CHKDSK found errors. They will be repaired at next reboot"
+    except subprocess.CalledProcessError as e:
+        raise UserWarning("Uncaught CHKDSK Behavior: \n" + ''.join(ch for ch in e.output if ch not in ['x00', 'x08']))
 
 
 def run_chkdsk_defer():
@@ -770,7 +784,7 @@ os_troubleshooting__center = Frame(tab__os_troubleshooting, style='White.TFrame'
 system_group = LabelFrame(os_troubleshooting__center, text="System")
 sfc2_button = Button(system_group, text="SFC", command=run_sfc_defer)
 sfc2_button.pack(padx=5, pady=5, fill=X)
-dism_button = Button(system_group, text="DISM", command=run_dism_defer, state=DISABLED)
+dism_button = Button(system_group, text="DISM", command=run_dism_defer)
 dism_button.pack(padx=5, pady=5, fill=X)
 aio_button = Button(system_group, text="All in One", command=run_aio_defer, state=DISABLED)
 aio_button.pack(padx=5, pady=5, fill=X)
