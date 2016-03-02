@@ -607,11 +607,22 @@ def run_aio_defer():
 
 
 def run_defrag():
-    return 0
+    try:
+        output = subprocess.check_output("defrag C: /H /O /U /V")
+        output = ''.join(ch for ch in output if ch not in ['x00', 'x08'])
+        if "The operation completed successfully" in output:
+            return "Disk Optimization or Defragmentation Complete."
+        elif "An operation is currently in progress" in output:
+            raise UserWarning("Disk Optimization currently in progress.")
+        else:
+            raise UserWarning("Disk Optimization failed:\n" + ''.join(ch for ch in output if ch not in ['x00', 'x08']))
+    except subprocess.CalledProcessError as e:
+        raise UserWarning(
+            "Uncaught Disk Optimization Behavior: \n" + ''.join(ch for ch in e.output if ch not in ['x00', 'x08']))
 
 
 def run_defrag_defer():
-    app_defer(run_defrag, "Disk Defragmenter")
+    app_defer(run_defrag, "Disk Optimizer")
 
 
 def run_chkdsk():
