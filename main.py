@@ -484,13 +484,17 @@ def get_mse_defer():
 
 
 def run_pnf():
-    subprocess.call(['control.exe', 'appwiz.cpl'])
-    return 0
+    try:
+        subprocess.check_call(['control.exe', 'appwiz.cpl'])
+    except subprocess.CalledProcessError:
+        log.error("Could not launch Programs and Features")
 
 
 def run_temp():
-    subprocess.call(['cleanmgr.exe'])
-    return 0
+    try:
+        subprocess.check_call(['cleanmgr.exe'])
+    except subprocess.CalledProcessError:
+        log.error("Could not launch Temporary File Cleanup")
 
 
 def run_temp_defer():
@@ -508,10 +512,13 @@ def run_ticket():
 
 def run_ipconfig():
     update_heartbeat("IPConfig Reset will cause this machine to become temporarily unreachable")
-    subprocess.call(['ipconfig.exe', '/release'])
-    subprocess.call(['ipconfig.exe', '/flushdns'])
-    subprocess.call(['ipconfig.exe', '/renew'])
-    return "IPConfig Complete."
+    try:
+        subprocess.check_call(['ipconfig.exe', '/release'])
+        subprocess.check_call(['ipconfig.exe', '/flushdns'])
+        subprocess.check_call(['ipconfig.exe', '/renew'])
+        return "IPConfig Complete."
+    except subprocess.CalledProcessError as e:
+        raise UserWarning("Uncaught IPConfig Behavior: \n" + ''.join(ch for ch in e.output if ch not in ['x00', 'x08']))
 
 
 def run_ipconfig_defer():
@@ -520,14 +527,17 @@ def run_ipconfig_defer():
 
 def run_winsock():
     update_heartbeat("Winsock Reset requires a restart; this machine may be unreachable until the restart is complete.")
-    subprocess.call(['netsh.exe', 'int', 'ip', 'reset'])
-    subprocess.call(['netsh.exe', 'winsock', 'reset'])
-    subprocess.call(['netsh.exe', 'winsock', 'reset', 'catalog'])
-    subprocess.call(['netsh.exe', 'advfirewall', 'reset'])
-    print "Reboot Necessary."
-    # Set ResTool to run on restart
-    # Restart the computer
-    return "Winsock Reset complete. Reboot Necessary."
+    try:
+        subprocess.check_call(['netsh.exe', 'int', 'ip', 'reset'])
+        subprocess.check_call(['netsh.exe', 'winsock', 'reset'])
+        subprocess.check_call(['netsh.exe', 'winsock', 'reset', 'catalog'])
+        subprocess.check_call(['netsh.exe', 'advfirewall', 'reset'])
+        print "Reboot Necessary."
+        # Set ResTool to run on restart
+        # Restart the computer
+        return "Winsock Reset complete. Reboot Necessary."
+    except subprocess.CalledProcessError as e:
+        raise UserWarning("Uncaught Winsock Behavior: \n" + ''.join(ch for ch in e.output if ch not in ['x00', 'x08']))
 
 
 def run_winsock_defer():
@@ -556,8 +566,10 @@ def run_speed():
 
 
 def run_netcpl():
-    subprocess.call(['control.exe', '/name', 'Microsoft.NetworkAndSharingCenter'])
-    return 0
+    try:
+        subprocess.check_call(['control.exe', '/name', 'Microsoft.NetworkAndSharingCenter'])
+    except subprocess.CalledProcessError:
+        log.error("Could not launch Network and Sharing Center")
 
 
 def run_sfc():
@@ -632,7 +644,7 @@ def run_chkdsk():
         if "found no problems." in output:
             return "CHKDSK found no errors"
         else:
-            subprocess.call("fsutil set dirty")
+            subprocess.check_call("fsutil set dirty")
             return "CHKDSK found errors. They will be repaired at next reboot"
     except subprocess.CalledProcessError as e:
         raise UserWarning("Uncaught CHKDSK Behavior: \n" + ''.join(ch for ch in e.output if ch not in ['x00', 'x08']))
@@ -643,7 +655,10 @@ def run_chkdsk_defer():
 
 
 def run_dmc():
-    subprocess.call(['mmc.exe', 'devmgmt.msc'])
+    try:
+        subprocess.check_call(['mmc.exe', 'devmgmt.msc'])
+    except subprocess.CalledProcessError:
+        log.error("Could not launch Device Manager")
 
 
 def rem_mse():
@@ -655,12 +670,17 @@ def rem_mse_defer():
 
 
 def run_cpl():
-    subprocess.call(['control.exe'])
-    return 0
+    try:
+        subprocess.check_call(['control.exe'])
+    except subprocess.CalledProcessError:
+        log.error("Could not launch Control Panel")
 
 
 def run_reg():
-    subprocess.call(['regedit.exe'])
+    try:
+        subprocess.check_call(['regedit.exe'])
+    except subprocess.CalledProcessError:
+        log.error("Could not launch Registry Editor")
     return 0
 
 
@@ -799,9 +819,9 @@ dism_button = Button(system_group, text="DISM", command=run_dism_defer)
 dism_button.pack(padx=5, pady=5, fill=X)
 aio_button = Button(system_group, text="All in One", command=run_aio_defer, state=DISABLED)
 aio_button.pack(padx=5, pady=5, fill=X)
-dfg_button = Button(system_group, text="Defragment", command=run_defrag_defer, state=DISABLED)
+dfg_button = Button(system_group, text="Defragment", command=run_defrag_defer)
 dfg_button.pack(padx=5, pady=5, fill=X)
-ckd_button = Button(system_group, text="Disk Check", command=run_chkdsk_defer, state=DISABLED)
+ckd_button = Button(system_group, text="Disk Check", command=run_chkdsk_defer)
 ckd_button.pack(padx=5, pady=5, fill=X)
 dmc_button = Button(system_group, text="Device Mgmt.", command=run_dmc)
 dmc_button.pack(padx=5, pady=5, fill=X)
