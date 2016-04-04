@@ -25,6 +25,9 @@ import socket
 import ctypes
 from platform import platform
 
+# Process/Window Control Imports
+from pywinauto.application import Application
+
 # Registry and File Manipulation
 import _winreg as reg
 import io
@@ -553,7 +556,10 @@ def run_hidapters_defer():
 
 
 def run_wifi():
-    return 0
+    try:
+        return subprocess.check_output(["netsh", "wlan", "add", "profile", 'filename="programs\Wi-Fi.xml"'])
+    except subprocess.CalledProcessError as e:
+        raise UserWarning("Uncaught WiFi Add Behavior: \n" + ''.join(ch for ch in e.output if ch not in ['x00', 'x08']))
 
 
 def run_wifi_defer():
@@ -685,7 +691,23 @@ def run_reg():
 
 
 def run_awp():
-    return 0
+    application = Application()
+    try:
+        application.Start("programs/awp.exe")
+    except UserWarning: # bitness error
+        pass
+    application.PackageWindowsAnywherePrintClient.Accept.Wait("exists enabled visible ready", 30)
+    application.PackageWindowsAnywherePrintClient.Accept.ClickInput()
+    application.PackageWindowsAnywherePrintClient.Install.Wait("exists enabled visible ready", 30)
+    application.PackageWindowsAnywherePrintClient.Install.ClickInput()
+    application.PackageWindowsAnywherePrintClient.Finish.Wait("exists enabled visible ready", 3600)
+    try:
+        assert "success" in application.PackageWindowsAnywherePrintClient.Edit.TextBlock()
+        application.PackageWindowsAnywherePrintClient.Finish.ClickInput()
+        return "AnywherePrint Client Successfully Installed"
+    except AssertionError:
+        application.PackageWindowsAnywherePrintClient.Finish.ClickInput()
+        raise UserWarning("Uncaught AnywherePrint Install Behavior:/n" + application.PackageWindowsAnywherePrintClient.Edit.TextBlock())
 
 
 def run_awp_defer():
@@ -802,7 +824,7 @@ wsr_button = Button(network_group, text="Winsock", command=run_winsock_defer)
 wsr_button.pack(padx=5, pady=5, fill=X)
 had_button = Button(network_group, text="Hid. Adapters", command=run_hidapters_defer, state=DISABLED)
 had_button.pack(padx=5, pady=5, fill=X)
-wzc_button = Button(network_group, text="NIUwireless", command=run_wifi_defer, state=DISABLED)
+wzc_button = Button(network_group, text="NIUwireless", command=run_wifi_defer)
 wzc_button.pack(padx=5, pady=5, fill=X)
 sts_button = Button(network_group, text="Speedtest", command=run_speed)
 sts_button.pack(padx=5, pady=5, fill=X)
@@ -836,7 +858,7 @@ cpl_button = Button(miscellaneous_group, text="Control Panel", command=run_cpl)
 cpl_button.pack(padx=5, pady=5, fill=X)
 reg_button = Button(miscellaneous_group, text="Registry", command=run_reg)
 reg_button.pack(padx=5, pady=5, fill=X)
-awp_button = Button(miscellaneous_group, text="Pharos", command=run_awp_defer, state=DISABLED)
+awp_button = Button(miscellaneous_group, text="Pharos", command=run_awp_defer)
 awp_button.pack(padx=5, pady=5, fill=X)
 miscellaneous_group.pack()
 os_troubleshooting__right.pack(side=LEFT, expand=True, fill=X, pady=5)
