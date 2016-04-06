@@ -23,7 +23,7 @@ import webbrowser
 import os
 import socket
 import ctypes
-from platform import platform
+import platform
 
 # Process/Window Control Imports
 from pywinauto.application import Application
@@ -150,7 +150,7 @@ class ResToolStatusBar(Frame):
             bits = ' x64'
         except KeyError:  # it's like an if-else except all the logic relies on a KeyError (or lack thereof)
             bits = ' x32'
-        value = 'Windows ' + str(platform()).split('-')[1] + bits  # Concatenate (platform returns 'Windows-?-...')
+        value = 'Windows ' + str(platform.platform()).split('-')[1] + bits
         self.version_text.set(value)
 
     def set_ip(self):
@@ -479,7 +479,53 @@ def run_tdss_defer():
 
 
 def get_mse():
-    return 0
+    # if windows 7 - This is untested b/c I didn't have a win7 computer to test on.
+    if platform.win32_ver()[0] == 7:
+
+        # create application
+        application = Application()
+        application.start("\programs\MSE.exe")
+        application.MicrosoftSecurityEssentials.Wait("exists visible enabled ready", 3600)
+
+        # welcome
+        application.MicrosoftSecurityEssentials.Next.Wait("exists visible enabled ready", 30)
+        application.MicrosoftSecurityEssentials.Next.ClickInput()
+
+        # EULA
+        application.MicrosoftSecurityEssentials.Iaccept.Wait("exists visible enabled ready", 30)
+        application.MicrosoftSecurityEssentials.Iaccept.ClickInput()
+
+        # Customer Improvement
+        application.MicrosoftSecurityEssentials.Next.Wait("exists visible enabled ready", 30)
+        application.MicrosoftSecurityEssentials.JointheCustomerExperienceImprovementProgram.ClickInput()
+        application.MicrosoftSecurityEssentials.Next.ClickInput()
+
+        # Optimize Security
+        application.MicrosoftSecurityEssentials.Next.Wait("exists visible enabled ready", 30)
+        application.MicrosoftSecurityEssentials.Turnonautomaticsamplesubmission.ClickInput()
+        application.MicrosoftSecurityEssentials.Next.ClickInput()
+
+        # ready to install
+        application.MicrosoftSecurityEssentials.Install.Wait("exists visible enabled ready", 30)
+        application.MicrosoftSecurityEssentials.Install.ClickInput()
+
+        application.MicrosoftSecurityEssentials.Finish.Wait("exists visible enabled ready", 3600)
+        application.MicrosoftSecurityEssentials.Finish.ClickInput()
+        return "Microsoft Security Essentials Successfully Installed"
+    # if windows 8 or newer - enable
+    else:
+        subprocess.call("control.exe /name Microsoft.WindowsDefender")
+        result = ctypes.windll.user32.MessageBoxW(0,
+                                                  u"Windows Defender is open. If disabled, it must be manually " +
+                                                  u"enabled.\nFollow the prompts to enable Windows Defender and " +
+                                                  u"then click OK here.\nIf you are unable to enable Windows " +
+                                                  u"Defender, please click Cancel instead.",
+                                                  u"Manually Enable Windows Defender:",
+                                                  4161)
+        if result == 1:  # yes
+            return "Windows Defender Manually Enabled."
+        elif result == 2:  # no
+            raise UserWarning("Windows Defender Not Manually Enabled.")
 
 
 def get_mse_defer():
@@ -694,7 +740,7 @@ def run_awp():
     application = Application()
     try:
         application.Start("programs/awp.exe")
-    except UserWarning: # bitness error
+    except UserWarning:  # bitness error
         pass
     application.PackageWindowsAnywherePrintClient.Accept.Wait("exists enabled visible ready", 30)
     application.PackageWindowsAnywherePrintClient.Accept.ClickInput()
@@ -707,7 +753,9 @@ def run_awp():
         return "AnywherePrint Client Successfully Installed"
     except AssertionError:
         application.PackageWindowsAnywherePrintClient.Finish.ClickInput()
-        raise UserWarning("Uncaught AnywherePrint Install Behavior:/n" + application.PackageWindowsAnywherePrintClient.Edit.TextBlock())
+        raise UserWarning(
+            "Uncaught AnywherePrint Install Behavior:/n" +
+            application.PackageWindowsAnywherePrintClient.Edit.TextBlock())
 
 
 def run_awp_defer():
@@ -801,7 +849,7 @@ tdss_button = Button(rootkit_group, text="TDSS", command=run_tdss_defer, state=D
 tdss_button.pack(padx=5, pady=5, fill=X)
 rootkit_group.grid(row=0)
 misc_group = LabelFrame(virus_scans__right, text="Misc.")
-mse_button = Button(misc_group, text="Inst. MSE", command=get_mse_defer, state=DISABLED)
+mse_button = Button(misc_group, text="Inst. MSE", command=get_mse_defer)
 mse_button.pack(padx=5, pady=5, fill=X)
 progs_button = Button(misc_group, text="Prog&Feat", command=run_pnf)
 progs_button.pack(padx=5, pady=5, fill=X)
