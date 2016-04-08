@@ -407,68 +407,99 @@ def run_cf_defer():
 
 
 def run_mwb():
-    application = Application()
-    try:
-        application.Start("programs/MWB.exe")
-    except UserWarning:  # bitness error
-        pass
-    time.sleep(0.25)
-    try:
-        application.connect(title_re="Select Set*")
-    except UserWarning:  # bitness error
-        pass
-    application.SelectSetupLanguage.OK.ClickInput()
-    application.SetupMalwarebytesAntiMalware.Wait("exists enabled visible ready", 30)
-    application.SetupMalwarebytesAntiMalware.Next.ClickInput()
-    application.SetupMalwarebytesAntiMalware.Iaccepttheagreement.Wait("exists enabled visible ready", 30)
-    application.SetupMalwarebytesAntiMalware.Iaccepttheagreement.ClickInput()
-    application.SetupMalwarebytesAntiMalware.Next.Wait("exists enabled visible ready", 30)
-    application.SetupMalwarebytesAntiMalware.Next.ClickInput()
-    application.SetupMalwarebytesAntiMalware.Next.Wait("exists enabled visible ready", 30)
-    application.SetupMalwarebytesAntiMalware.Next.ClickInput()
-    application.SetupMalwarebytesAntiMalware.Next.Wait("exists enabled visible ready", 30)
-    application.SetupMalwarebytesAntiMalware.Next.ClickInput()
-    application.SetupMalwarebytesAntiMalware.Next.Wait("exists enabled visible ready", 30)
-    application.SetupMalwarebytesAntiMalware.Next.ClickInput()
-    application.SetupMalwarebytesAntiMalware.Next.Wait("exists enabled visible ready", 30)
-    application.SetupMalwarebytesAntiMalware.Next.ClickInput()
-    application.SetupMalwarebytesAntiMalware.Install.Wait("exists enabled visible ready", 30)
-    application.SetupMalwarebytesAntiMalware.Install.ClickInput()
-    application.SetupMalwarebytesAntiMalware.Finish.Wait("exists enabled visible ready", 3600)
-    application.SetupMalwarebytesAntiMalware.Finish.ClickInput()
-    # updating MWB, connecting to server
-    time.sleep(5)
-    try:
-        application.connect(title_re="Malwarebytes.*")
-    except UserWarning:  # bitness error
-        pass
-    application.MalwarebytesAntiMalware.OK.Wait("exists enabled visible ready", 3600)
-    application.MalwarebytesAntiMalware.OK.ClickInput()
-    # install MWB updated ver
-    time.sleep(1)
-    try:
-        application.connect(title_re="Select Set*")
-    except UserWarning:  # bitness error
-        pass
-    application.SelectSetupLanguage.OK.ClickInput()
-    application.SetupMalwarebytesAntiMalware.Wait("exists enabled visible ready", 30)
-    application.SetupMalwarebytesAntiMalware.Next.ClickInput()
-    application.SetupMalwarebytesAntiMalware.Iaccepttheagreement.Wait("exists enabled visible ready", 30)
-    application.SetupMalwarebytesAntiMalware.Iaccepttheagreement.ClickInput()
-    application.SetupMalwarebytesAntiMalware.Next.Wait("exists enabled visible ready", 30)
-    application.SetupMalwarebytesAntiMalware.Next.ClickInput()
-    application.SetupMalwarebytesAntiMalware.Next.Wait("exists enabled visible ready", 30)
-    application.SetupMalwarebytesAntiMalware.Next.ClickInput()
-    application.SetupMalwarebytesAntiMalware.Next.Wait("exists enabled visible ready", 30)
-    application.SetupMalwarebytesAntiMalware.Next.ClickInput()
-    application.SetupMalwarebytesAntiMalware.Next.Wait("exists enabled visible ready", 30)
-    application.SetupMalwarebytesAntiMalware.Next.ClickInput()
-    application.SetupMalwarebytesAntiMalware.Next.Wait("exists enabled visible ready", 30)
-    application.SetupMalwarebytesAntiMalware.Next.ClickInput()
-    application.SetupMalwarebytesAntiMalware.Install.Wait("exists enabled visible ready", 30)
-    application.SetupMalwarebytesAntiMalware.Install.ClickInput()
-    application.SetupMalwarebytesAntiMalware.Finish.Wait("exists enabled visible ready", 3600)
-    application.SetupMalwarebytesAntiMalware.Finish.ClickInput()
+    if (os.path.isfile("C:\Program Files (x86)\Malwarebytes Anti-Malware\mbam.exe")):
+        doesExist = Application()
+        try:
+            doesExist.start("C:\Program Files (x86)\Malwarebytes Anti-Malware\mbam.exe")
+        except UserWarning:  #bitness error
+            pass
+        time.sleep(2)
+        try:
+            doesExist.connect(title_re="Malwarebytes.*")
+        except UserWarning:  # bitness error
+            pass
+        finally:
+            doesExist.connect(title_re="Malwarebytes.*")
+        doesExist.MalwareBytesAntiMalwareHome.ScanNow.Wait("exists enabled visible ready", 60)
+        doesExist.MalwareBytesAntiMalwareHome.ScanNow.ClickInput()
+    else:
+        application = Application()
+        try:
+            application.Start("programs/MWB.exe")
+        except UserWarning:  # bitness error
+            pass
+        time.sleep(0.25)
+        try:
+            application.connect(title_re="Select Set*")
+        except UserWarning:  # bitness error
+            pass
+        application.SelectSetupLanguage.OK.ClickInput()
+        application.SetupMalwarebytesAntiMalware.Wait("exists enabled visible ready", 30)
+        application.SetupMalwarebytesAntiMalware.Next.ClickInput()
+        application.SetupMalwarebytesAntiMalware.Iaccepttheagreement.Wait("exists enabled visible ready", 30)
+        application.SetupMalwarebytesAntiMalware.Iaccepttheagreement.ClickInput()
+        application.SetupMalwarebytesAntiMalware.Next.Wait("exists enabled visible ready", 30)
+        application.SetupMalwarebytesAntiMalware.Next.ClickInput()
+        application.SetupMalwarebytesAntiMalware.Next.Wait("exists enabled visible ready", 30)
+        application.SetupMalwarebytesAntiMalware.Next.ClickInput()
+        application.SetupMalwarebytesAntiMalware.Next.Wait("exists enabled visible ready", 30)
+        application.SetupMalwarebytesAntiMalware.Next.ClickInput()
+        application.SetupMalwarebytesAntiMalware.Next.Wait("exists enabled visible ready", 30)
+        application.SetupMalwarebytesAntiMalware.Next.ClickInput()
+        application.SetupMalwarebytesAntiMalware.Next.Wait("exists enabled visible ready", 30)
+        application.SetupMalwarebytesAntiMalware.Next.ClickInput()
+        application.SetupMalwarebytesAntiMalware.Install.Wait("exists enabled visible ready", 30)
+        application.SetupMalwarebytesAntiMalware.Install.ClickInput()
+        application.SetupMalwarebytesAntiMalware.Finish.Wait("exists enabled visible ready", 3600)
+        application.SetupMalwarebytesAntiMalware.Finish.ClickInput()
+        # updating MWB, connecting to server
+        time.sleep(15)
+        try:
+            application.connect(title_re="Malwarebytes.*")
+        except UserWarning:  # bitness error
+            pass
+        finally:
+            application.connect(title_re="Malwarebytes.")
+        application.MalwarebytesAntiMalware.OK.Wait("exists enabled visible ready", 3600)
+        application.MalwarebytesAntiMalware.OK.ClickInput()
+        # install MWB updated ver
+        time.sleep(1)
+        try:
+            application.connect(title_re="Select Set*")
+        except UserWarning:  # bitness error
+            pass
+        application.SelectSetupLanguage.OK.ClickInput()
+        application.SetupMalwarebytesAntiMalware.Wait("exists enabled visible ready", 30)
+        application.SetupMalwarebytesAntiMalware.Next.ClickInput()
+        application.SetupMalwarebytesAntiMalware.Iaccepttheagreement.Wait("exists enabled visible ready", 30)
+        application.SetupMalwarebytesAntiMalware.Iaccepttheagreement.ClickInput()
+        application.SetupMalwarebytesAntiMalware.Next.Wait("exists enabled visible ready", 30)
+        application.SetupMalwarebytesAntiMalware.Next.ClickInput()
+        application.SetupMalwarebytesAntiMalware.Next.Wait("exists enabled visible ready", 30)
+        application.SetupMalwarebytesAntiMalware.Next.ClickInput()
+        application.SetupMalwarebytesAntiMalware.Next.Wait("exists enabled visible ready", 30)
+        application.SetupMalwarebytesAntiMalware.Next.ClickInput()
+        application.SetupMalwarebytesAntiMalware.Next.Wait("exists enabled visible ready", 30)
+        application.SetupMalwarebytesAntiMalware.Next.ClickInput()
+        application.SetupMalwarebytesAntiMalware.Next.Wait("exists enabled visible ready", 30)
+        application.SetupMalwarebytesAntiMalware.Next.ClickInput()
+        application.SetupMalwarebytesAntiMalware.Install.Wait("exists enabled visible ready", 30)
+        application.SetupMalwarebytesAntiMalware.Install.ClickInput()
+        application.SetupMalwarebytesAntiMalware.Finish.Wait("exists enabled visible ready", 3600)
+        application.SetupMalwarebytesAntiMalware.Finish.ClickInput()
+        # Start scan window
+        time.sleep(20)
+        try:
+            application.connect(title_re="MalwarebytesAnti*")
+        except UserWarning:  # bitness error
+            pass
+        finally:
+            application.connect(title_re="MalwarebytesAnti*")
+        application.MalwarebytesAntiMalwareHome.Wait("exists enabled visible ready", 30)
+        application.MalwarebytesAntiMalwareHome.ScanNow("exists enabled visible ready", 30)
+        application.MalwarebytesAntiMalwareHome.ScanNow.ClickInput()
+        application.MalwarebytesAntiMalwareHome.Finish.Wait("exists enabled visible ready", 14440)
+
     return 0
 
 
