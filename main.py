@@ -410,12 +410,12 @@ def run_mwb():
     application = Application()
     try:
         application.Start("programs/MWB.exe")
-    except UserWarning:  #bitness error
+    except UserWarning:  # bitness error
         pass
     time.sleep(0.25)
     try:
         application.connect(title_re="Select Set*")
-    except UserWarning:  #bitness error
+    except UserWarning:  # bitness error
         pass
     application.SelectSetupLanguage.OK.ClickInput()
     application.SetupMalwarebytesAntiMalware.Wait("exists enabled visible ready", 30)
@@ -436,19 +436,19 @@ def run_mwb():
     application.SetupMalwarebytesAntiMalware.Install.ClickInput()
     application.SetupMalwarebytesAntiMalware.Finish.Wait("exists enabled visible ready", 3600)
     application.SetupMalwarebytesAntiMalware.Finish.ClickInput()
-    #updating MWB, connecting to server
+    # updating MWB, connecting to server
     time.sleep(5)
     try:
         application.connect(title_re="Malwarebytes.*")
-    except UserWarning:  #bitness error
+    except UserWarning:  # bitness error
         pass
     application.MalwarebytesAntiMalware.OK.Wait("exists enabled visible ready", 3600)
     application.MalwarebytesAntiMalware.OK.ClickInput()
-    #install MWB updated ver
+    # install MWB updated ver
     time.sleep(1)
     try:
         application.connect(title_re="Select Set*")
-    except UserWarning:  #bitness error
+    except UserWarning:  # bitness error
         pass
     application.SelectSetupLanguage.OK.ClickInput()
     application.SetupMalwarebytesAntiMalware.Wait("exists enabled visible ready", 30)
