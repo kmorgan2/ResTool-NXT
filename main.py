@@ -24,6 +24,7 @@ import os
 import socket
 import ctypes
 from platform import platform
+import time
 
 # Process/Window Control Imports
 from pywinauto.application import Application
@@ -406,6 +407,68 @@ def run_cf_defer():
 
 
 def run_mwb():
+    application = Application()
+    try:
+        application.Start("programs/MWB.exe")
+    except UserWarning:  #bitness error
+        pass
+    time.sleep(0.25)
+    try:
+        application.connect(title_re="Select Set*")
+    except UserWarning:  #bitness error
+        pass
+    application.SelectSetupLanguage.OK.ClickInput()
+    application.SetupMalwarebytesAntiMalware.Wait("exists enabled visible ready", 30)
+    application.SetupMalwarebytesAntiMalware.Next.ClickInput()
+    application.SetupMalwarebytesAntiMalware.Iaccepttheagreement.Wait("exists enabled visible ready", 30)
+    application.SetupMalwarebytesAntiMalware.Iaccepttheagreement.ClickInput()
+    application.SetupMalwarebytesAntiMalware.Next.Wait("exists enabled visible ready", 30)
+    application.SetupMalwarebytesAntiMalware.Next.ClickInput()
+    application.SetupMalwarebytesAntiMalware.Next.Wait("exists enabled visible ready", 30)
+    application.SetupMalwarebytesAntiMalware.Next.ClickInput()
+    application.SetupMalwarebytesAntiMalware.Next.Wait("exists enabled visible ready", 30)
+    application.SetupMalwarebytesAntiMalware.Next.ClickInput()
+    application.SetupMalwarebytesAntiMalware.Next.Wait("exists enabled visible ready", 30)
+    application.SetupMalwarebytesAntiMalware.Next.ClickInput()
+    application.SetupMalwarebytesAntiMalware.Next.Wait("exists enabled visible ready", 30)
+    application.SetupMalwarebytesAntiMalware.Next.ClickInput()
+    application.SetupMalwarebytesAntiMalware.Install.Wait("exists enabled visible ready", 30)
+    application.SetupMalwarebytesAntiMalware.Install.ClickInput()
+    application.SetupMalwarebytesAntiMalware.Finish.Wait("exists enabled visible ready", 3600)
+    application.SetupMalwarebytesAntiMalware.Finish.ClickInput()
+    #updating MWB, connecting to server
+    time.sleep(5)
+    try:
+        application.connect(title_re="Malwarebytes.*")
+    except UserWarning:  #bitness error
+        pass
+    application.MalwarebytesAntiMalware.OK.Wait("exists enabled visible ready", 3600)
+    application.MalwarebytesAntiMalware.OK.ClickInput()
+    #install MWB updated ver
+    time.sleep(1)
+    try:
+        application.connect(title_re="Select Set*")
+    except UserWarning:  #bitness error
+        pass
+    application.SelectSetupLanguage.OK.ClickInput()
+    application.SetupMalwarebytesAntiMalware.Wait("exists enabled visible ready", 30)
+    application.SetupMalwarebytesAntiMalware.Next.ClickInput()
+    application.SetupMalwarebytesAntiMalware.Iaccepttheagreement.Wait("exists enabled visible ready", 30)
+    application.SetupMalwarebytesAntiMalware.Iaccepttheagreement.ClickInput()
+    application.SetupMalwarebytesAntiMalware.Next.Wait("exists enabled visible ready", 30)
+    application.SetupMalwarebytesAntiMalware.Next.ClickInput()
+    application.SetupMalwarebytesAntiMalware.Next.Wait("exists enabled visible ready", 30)
+    application.SetupMalwarebytesAntiMalware.Next.ClickInput()
+    application.SetupMalwarebytesAntiMalware.Next.Wait("exists enabled visible ready", 30)
+    application.SetupMalwarebytesAntiMalware.Next.ClickInput()
+    application.SetupMalwarebytesAntiMalware.Next.Wait("exists enabled visible ready", 30)
+    application.SetupMalwarebytesAntiMalware.Next.ClickInput()
+    application.SetupMalwarebytesAntiMalware.Next.Wait("exists enabled visible ready", 30)
+    application.SetupMalwarebytesAntiMalware.Next.ClickInput()
+    application.SetupMalwarebytesAntiMalware.Install.Wait("exists enabled visible ready", 30)
+    application.SetupMalwarebytesAntiMalware.Install.ClickInput()
+    application.SetupMalwarebytesAntiMalware.Finish.Wait("exists enabled visible ready", 3600)
+    application.SetupMalwarebytesAntiMalware.Finish.ClickInput()
     return 0
 
 
@@ -694,7 +757,7 @@ def run_awp():
     application = Application()
     try:
         application.Start("programs/awp.exe")
-    except UserWarning: # bitness error
+    except UserWarning:  # bitness error
         pass
     application.PackageWindowsAnywherePrintClient.Accept.Wait("exists enabled visible ready", 30)
     application.PackageWindowsAnywherePrintClient.Accept.ClickInput()
@@ -707,7 +770,8 @@ def run_awp():
         return "AnywherePrint Client Successfully Installed"
     except AssertionError:
         application.PackageWindowsAnywherePrintClient.Finish.ClickInput()
-        raise UserWarning("Uncaught AnywherePrint Install Behavior:/n" + application.PackageWindowsAnywherePrintClient.Edit.TextBlock())
+        raise UserWarning("Uncaught AnywherePrint Install Behavior:/n" +
+                          application.PackageWindowsAnywherePrintClient.Edit.TextBlock())
 
 
 def run_awp_defer():
@@ -765,7 +829,7 @@ virus_scans__left = Frame(tab__virus_scans, style='White.TFrame')
 av_scanners_group = LabelFrame(virus_scans__left, text="AV Scans")
 cf_button = Button(av_scanners_group, text="ComboFix", command=run_cf_defer, state=DISABLED)
 cf_button.pack(padx=5, pady=5, fill=X)
-mwb_button = Button(av_scanners_group, text="Malwarebytes", command=run_mwb_defer, state=DISABLED)
+mwb_button = Button(av_scanners_group, text="Malwarebytes", command=run_mwb_defer)
 mwb_button.pack(padx=5, pady=5, fill=X)
 eset_button = Button(av_scanners_group, text="ESET", command=run_eset_defer, state=DISABLED)
 eset_button.pack(padx=5, pady=5, fill=X)
