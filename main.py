@@ -547,20 +547,68 @@ def run_cc_defer():
 
 
 def rem_scans():
+    uninstalled_programs = []
     application = Application()
 
     # remove MWB
-
+    if os.path.isfile("C:\Program Files (x86)\Malwarebytes Anti-Malware\unins000.exe"):
+        application.start("C:\Program Files (x86)\Malwarebytes Anti-Malware\unins000.exe")
+        time.sleep(1)
+        application.connect(title_re=".*Malwarebytes Anti-Malware Uninstall.*")
+        application.MalwarebytesAntiMalwareUninstall.Yes.Wait("exists visible enabled ready", 30)
+        application.MalwarebytesAntiMalwareUninstall.Yes.ClickInput()
+        application.MalwarebytesAntiMalwareUninstall.No.Wait("exists visible enabled ready", 3600)
+        application.MalwarebytesAntiMalwareUninstall.No.ClickInput()
+        uninstalled_programs.append("MWB")
     # remove ESET
-
+    if os.path.isfile("C:\Program Files (x86)\ESET\ESET Online Scanner\OnlineScannerUninstaller.exe"):
+        application.start("C:\Program Files (x86)\ESET\ESET Online Scanner\OnlineScannerUninstaller.exe")
+        application.ESETOnlineScanner.Yes.Wait("exists visible enabled ready", 30)
+        application.ESETOnlineScanner.Yes.ClickInput()
+        application.ESETOnlineScanner.OK.Wait("exists visible enabled ready", 3600)
+        application.ESETOnlineScanner.OK.ClickInput()
+        os.remove("C:\\Program Files (x86)\\ESET\\ESET Online Scanner\\OnlineScannerUninstaller.exe")
+        os.rmdir("C:\\Program Files (x86)\\ESET\\ESET Online Scanner\\")
+        uninstalled_programs.append("ESET")
     # remove SAS
 
     # remove SB
-
-    # remove CCleaner
-
+    if os.path.isfile("C:\Program Files (x86)\Spybot - Search & Destroy 2\unins000.exe"):
+        application.start("C:\Program Files (x86)\Spybot - Search & Destroy 2\unins000.exe")
+        application.connect(title_re=".*Spybot - Search & Destroy Uninstall.*")
+        application.SpybotSearchDestroyUninstall.Yes.Wait("exists visible enabled ready", 30)
+        application.SpybotSearchDestroyUninstall.Yes.ClickInput()
+        application.top_window_().Next.Wait("exists visible enabled ready", 60)
+        application.top_window_().Next.ClickInput()
+        application.top_window_().Uninstall.Wait("exists visible enabled ready", 60)
+        application.top_window_().IwanttoinformyouwhyIuninstallmyreasonis.ClickInput()
+        application.top_window_().Uninstall.ClickInput()
+        application.SpybotSearchDestroyUninstall.No.Wait("exists visible enabled ready", 3600)
+        application.SpybotSearchDestroyUninstall.No.ClickInput()
+        uninstalled_programs.append("SB")
+    # remove CCleaner - we may be uninstalling either pro or not, so we're vague about windows
+    if os.path.isfile("C:\Program Files\CCleaner\uninst.exe"):
+        application.start("C:\Program Files\CCleaner\uninst.exe")
+        time.sleep(1)
+        application.connect(title_re=".*CCleaner.*Uninstall.*")
+        application.top_window_().Next.Wait("exists visible enabled ready", 60)
+        application.top_window_().Next.ClickInput()
+        application.top_window_().Uninstall.Wait("exists visible enabled ready", 60)
+        application.top_window_().Uninstall.ClickInput()
+        application.top_window_().Finish.Wait("exists visible enabled ready", 3600)
+        application.top_window_().Finish.ClickInput()
+        uninstalled_programs.append("CC")
     # remove AIO
+    if os.path.isfile("C:\Program Files (x86)\Tweaking.com\Windows Repair (All in One)\uninstall.exe"):
+        application.start('"C:\Program Files (x86)\Tweaking.com\Windows Repair (All in One)\uninstall.exe" /U:' +
+                          '"C:\Program Files (x86)\Tweaking.com\Windows Repair (All in One)\Uninstall\uninstall.xml"')
+        application.TweakingcomWindowsRepairUninstaller.Next.Wait("exists visible enabled ready", 60)
+        application.TweakingcomWindowsRepairUninstaller.Next.ClickInput()
+        application.TweakingcomWindowsRepairUninstaller.Finish.Wait("exists visible enabled ready", 3600)
+        application.TweakingcomWindowsRepairUninstaller.Finish.ClickInput()
+        uninstalled_programs.append("AIO")
     return 0
+
 
 def rem_scans_defer():
     app_defer(rem_scans, "Scanner Uninstall")
@@ -941,7 +989,7 @@ cc_button = Button(system_cleanup_group, text="CCleaner", command=run_cc_defer, 
 cc_button.pack(padx=5, pady=5, fill=X)
 sfc_button = Button(system_cleanup_group, text="SFC", command=run_sfc_defer)
 sfc_button.pack(padx=5, pady=5, fill=X)
-uns_button = Button(system_cleanup_group, text="Rem. Scans", command=rem_scans, state=DISABLED)
+uns_button = Button(system_cleanup_group, text="Rem. Scans", command=rem_scans)
 uns_button.pack(padx=5, pady=5, fill=X)
 system_cleanup_group.grid(row=0, sticky=N)
 msconfig_group = LabelFrame(virus_scans__center, text="Safe Mode")
