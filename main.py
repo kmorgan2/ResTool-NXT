@@ -28,6 +28,8 @@ import time
 
 # Process/Window Control Imports
 from pywinauto.application import Application
+from win32gui import GetPixel, GetWindowDC, ReleaseDC
+import win32clipboard
 import subprocess
 
 # Registry and File Manipulation
@@ -418,8 +420,35 @@ def run_mwb():
             pass
         finally:
             application.connect(title_re="Malwarebytes.*")
-        application.MalwareBytesAntiMalwareHome.ScanNow.Wait("exists enabled visible ready", 60)
-        application.MalwareBytesAntiMalwareHome.ScanNow.ClickInput()
+
+        # Maximize MWB window and begin scan
+        application.MalwareBytesAntiMalwareHome.Restore()
+        application.MalwarebytesAntiMalwareHome.MoveWindow(0, 0, 1000, 500)
+        application.MalwarebytesAntiMalwareHome.ClickInput(coords=(493, 477))
+
+        # Gets and returns the pixel color at the specified coordinates
+        def get_color(window, x,y):
+            handle = window.handle
+            dc = GetWindowDC(handle)
+            color = int(GetPixel(dc, x,y))
+            ReleaseDC(handle, dc)
+            return (color & 0xff), ((color >> 8) & 0xff), ((color >> 16) & 0xff)
+
+        # Wait for "Finish" button to appear
+        while get_color(application.MalwareBytesAntiMalwareHome, 350, 478) != (37, 120, 230):
+            time.sleep(5)
+
+        # Copy results to clipboard
+        application.MalwarebytesAntiMalwareHome.ClickInput(coords=(900,520))
+        application.MalwarebytesAntiMalwareHome.ClickInput(coords=(900,540))
+        cb_results = win32clipboard.GetClipboardData()
+        num_infect = (int(cb_results.split("Processes: ")) + int(cb_results.split("Modules: ")) +
+                      int(cb_results.split("Registry Keys: ")) + int(cb_results.split("Registry Values: ")) +
+                      int(cb_results.split("Registry Data: ")) + int(cb_results.split("Folders: ")) +
+                      int(cb_results.split("Files: ")) + int(cb_results.split("Physical Sectors: ")))
+
+        return num_infect
+
     else:
         try:
             application.Start("programs/MWB.exe")
@@ -492,12 +521,34 @@ def run_mwb():
             pass
         finally:
             application.connect(title_re="MalwarebytesAnti*")
-        application.MalwarebytesAntiMalwareHome.Wait("exists enabled visible ready", 30)
-        application.MalwarebytesAntiMalwareHome.ScanNow("exists enabled visible ready", 30)
-        application.MalwarebytesAntiMalwareHome.ScanNow.ClickInput()
-        application.MalwarebytesAntiMalwareHome.Finish.Wait("exists enabled visible ready", 14440)
 
-    return 0
+        # Maximize MWB window and begin scan
+        application.MalwareBytesAntiMalwareHome.Restore()
+        application.MalwarebytesAntiMalwareHome.MoveWindow(0, 0, 1000, 500)
+        application.MalwarebytesAntiMalwareHome.ClickInput(coords=(493, 477))
+
+        # Gets and returns the pixel color at the specified coordinates
+        def get_color(window, x,y):
+            handle = window.handle
+            dc = GetWindowDC(handle)
+            color = int(GetPixel(dc, x,y))
+            ReleaseDC(handle, dc)
+            return (color & 0xff), ((color >> 8) & 0xff), ((color >> 16) & 0xff)
+
+        # Wait for "Finish" button to appear
+        while get_color(application.MalwareBytesAntiMalwareHome, 350, 478) != (37, 120, 230):
+            time.sleep(5)
+
+        # Copy results to clipboard
+        application.MalwarebytesAntiMalwareHome.ClickInput(coords=(900, 520))
+        application.MalwarebytesAntiMalwareHome.ClickInput(coords=(900, 540))
+        cb_results = win32clipboard.GetClipboardData()
+        num_infect = (int(cb_results.split("Processes: ")) + int(cb_results.split("Modules: ")) +
+                      int(cb_results.split("Registry Keys: ")) + int(cb_results.split("Registry Values: ")) +
+                      int(cb_results.split("Registry Data: ")) + int(cb_results.split("Folders: ")) +
+                      int(cb_results.split("Files: ")) + int(cb_results.split("Physical Sectors: ")))
+
+        return num_infect
 
 
 def run_mwb_defer():
@@ -537,77 +588,7 @@ def run_hc_defer():
 
 
 def run_cc():
-    # if installed
-    results = []
-    application = Application()
-    if os.path.isfile("C:\Program Files\CCleaner\CCleaner.exe"):
-        # Run Cleaner
-        try:
-            application.start("C:\Program Files\CCleaner\CCleaner.exe")
-        except UserWarning:
-            pass
-        time.sleep(1)
-        try:
-            application.connect(title_re=".*CCleaner Professional.*")
-        except UserWarning:
-            pass
-        application.CCleanerProfessional.Close()
-        application.PiriformCCleanerProfessionalEdition.RunCleaner.Wait("exists enabled visible ready", 60)
-        application.PiriformCCleanerProfessionalEdition.RunCleaner.ClickInput()
-        application.Dialog.OK.Wait("exists enabled visible ready", 60)
-        application.Dialog.OK.ClickInput()
-        while not application.PiriformCCleanerProfessionalEdition.RunCleaner.IsEnabled():
-            time.sleep(1)
-            if application.top_window_() != application.PiriformCCleanerProfessionalEdition:
-                if application.Dialog.Exists():
-                    application.Dialog.Yes.ClickInput()
-        results.append(application.PiriformCCleanerProfessionalEdition.Edit.WindowText().split('\r\n')[2])
-        # Run Registry Cleaner
-        application.PiriformCCleanerProfessionalEdition.Registry.ClickInput()
-        registry_value = 1
-        while not(registry_value == 0 or (len(results) > 2 and registry_value == results[-2])):
-            application.PiriformCCleanerProfessionalEdition.ScanforIssues.Wait("exists enabled visible ready", 60)
-            application.PiriformCCleanerProfessionalEdition.ScanforIssues.ClickInput()
-            application.PiriformCCleanerProfessionalEdition.ScanforIssues.Wait("exists enabled visible ready", 3600)
-            application.PiriformCCleanerProfessionalEdition.FixselectedIssues.ClickInput()
-            application.CCleaner.Yes.Wait("exists enabled visible ready", 60)
-            application.CCleaner.Yes.ClickInput()
-            application.SaveAs.Save.Wait("exists enabled visible ready", 60)
-            application.SaveAs.Save.ClickInput()
-            application.Dialog.Wait("exists enabled visible ready", 3600)
-            i=0
-            while application.Dialog.FixIssue.IsEnabled():
-                i += 1
-                application.Dialog.FixIssue.ClickInput()
-            application.Dialog['Close'].ClickInput()
-            results.append(i)
-            registry_value = i
-        # Close CCleaner
-        application.PiriformCCleanerProfessionalEdition.Close()
-        return "CCleaner generated the following results: \n\tCleaner: " + results[0] + "\n\tRegistry: " + ", ".join(
-            ([str(e) for e in results[1:]])) + " (Stopped due to identical passes)" if results[-1] ==results[-2] else ''
-
-    else:
-        # install
-        try:
-            application.start("programs/CC.exe")
-        except UserWarning:
-            pass
-        application.CCleanerProfessionalSetup.Next.Wait("exists enabled visible ready", 60)
-        application.CCleanerProfessionalSetup.Next.ClickInput()
-        application.CCleanerProfessionalSetup.Install.Wait("exists enabled visible ready", 60)
-        application.CCleanerProfessionalSetup.Install.ClickInput()
-        application.CCleanerProfessionalSetup.Finish.Wait("exists enabled visible ready", 3600)
-        application.CCleanerProfessionalSetup.ViewReleasenotes.ClickInput()
-        application.CCleanerProfessionalSetup.Finish.ClickInput()
-        time.sleep(2)
-        try:
-            application.connect(title_re=".*CCleaner Professional.*")
-        except UserWarning:
-            pass
-        application.CCleanerProfessional.Close()
-        application.PiriformCCleanerProfessionalEdition.Close()
-        return run_cc()
+    return 0
 
 
 def run_cc_defer():
@@ -615,92 +596,20 @@ def run_cc_defer():
 
 
 def rem_scans():
-    uninstalled_programs = []
     application = Application()
 
     # remove MWB
-    if os.path.isfile("C:\Program Files (x86)\Malwarebytes Anti-Malware\unins000.exe"):
-        try:
-            application.start("C:\Program Files (x86)\Malwarebytes Anti-Malware\unins000.exe")
-        except UserWarning:
-            pass
-        time.sleep(1)
-        try:
-            application.connect(title_re=".*Malwarebytes Anti-Malware Uninstall.*")
-        except UserWarning:
-            pass
-        application.MalwarebytesAntiMalwareUninstall.Yes.Wait("exists visible enabled ready", 30)
-        application.MalwarebytesAntiMalwareUninstall.Yes.ClickInput()
-        application.MalwarebytesAntiMalwareUninstall.No.Wait("exists visible enabled ready", 3600)
-        application.MalwarebytesAntiMalwareUninstall.No.ClickInput()
-        uninstalled_programs.append("MWB")
+
     # remove ESET
-    if os.path.isfile("C:\Program Files (x86)\ESET\ESET Online Scanner\OnlineScannerUninstaller.exe"):
-        try:
-            application.start("C:\Program Files (x86)\ESET\ESET Online Scanner\OnlineScannerUninstaller.exe")
-        except UserWarning:
-            pass
-        application.ESETOnlineScanner.Yes.Wait("exists visible enabled ready", 30)
-        application.ESETOnlineScanner.Yes.ClickInput()
-        application.ESETOnlineScanner.OK.Wait("exists visible enabled ready", 3600)
-        application.ESETOnlineScanner.OK.ClickInput()
-        os.remove("C:\\Program Files (x86)\\ESET\\ESET Online Scanner\\OnlineScannerUninstaller.exe")
-        os.rmdir("C:\\Program Files (x86)\\ESET\\ESET Online Scanner\\")
-        uninstalled_programs.append("ESET")
+
     # remove SAS
 
     # remove SB
-    if os.path.isfile("C:\Program Files (x86)\Spybot - Search & Destroy 2\unins000.exe"):
-        try:
-            application.start("C:\Program Files (x86)\Spybot - Search & Destroy 2\unins000.exe")
-        except UserWarning:
-            pass
-        try:
-            application.connect(title_re=".*Spybot - Search & Destroy Uninstall.*")
-        except UserWarning:
-            pass
-        application.SpybotSearchDestroyUninstall.Yes.Wait("exists visible enabled ready", 30)
-        application.SpybotSearchDestroyUninstall.Yes.ClickInput()
-        application.top_window_().Next.Wait("exists visible enabled ready", 60)
-        application.top_window_().Next.ClickInput()
-        application.top_window_().Uninstall.Wait("exists visible enabled ready", 60)
-        application.top_window_().IwanttoinformyouwhyIuninstallmyreasonis.ClickInput()
-        application.top_window_().Uninstall.ClickInput()
-        application.SpybotSearchDestroyUninstall.No.Wait("exists visible enabled ready", 3600)
-        application.SpybotSearchDestroyUninstall.No.ClickInput()
-        uninstalled_programs.append("SB")
-    # remove CCleaner - we may be uninstalling either pro or not, so we're vague about windows
-    if os.path.isfile("C:\Program Files\CCleaner\uninst.exe"):
-        try:
-            application.start("C:\Program Files\CCleaner\uninst.exe")
-        except UserWarning:
-            pass
-        time.sleep(1)
-        try:
-            application.connect(title_re=".*CCleaner.*Uninstall.*")
-        except UserWarning:
-            pass
-        application.top_window_().Next.Wait("exists visible enabled ready", 60)
-        application.top_window_().Next.ClickInput()
-        application.top_window_().Uninstall.Wait("exists visible enabled ready", 60)
-        application.top_window_().Uninstall.ClickInput()
-        application.top_window_().Finish.Wait("exists visible enabled ready", 3600)
-        application.top_window_().Finish.ClickInput()
-        uninstalled_programs.append("CC")
-    # remove AIO
-    if os.path.isfile("C:\Program Files (x86)\Tweaking.com\Windows Repair (All in One)\uninstall.exe"):
-        try:
-            application.start('"C:\Program Files (x86)\Tweaking.com\Windows Repair (All in One)\uninstall.exe" /U: C:' +
-                              '"\Program Files (x86)\Tweaking.com\Windows Repair (All in One)\Uninstall\uninstall.xml"')
-        except UserWarning:
-            pass
-        application.TweakingcomWindowsRepairUninstaller.Next.Wait("exists visible enabled ready", 60)
-        application.TweakingcomWindowsRepairUninstaller.Next.ClickInput()
-        application.TweakingcomWindowsRepairUninstaller.Finish.Wait("exists visible enabled ready", 3600)
-        application.TweakingcomWindowsRepairUninstaller.Finish.ClickInput()
-        uninstalled_programs.append("AIO")
-    return "Removed the following programs: " + ", ".join(uninstalled_programs)
 
+    # remove CCleaner
+
+    # remove AIO
+    return 0
 
 def rem_scans_defer():
     app_defer(rem_scans, "Scanner Uninstall")
@@ -733,10 +642,7 @@ def get_mse():
 
         # create application
         application = Application()
-        try:
-            application.start("\programs\MSE.exe")
-        except UserWarning:
-            pass
+        application.start("\programs\MSE.exe")
         application.MicrosoftSecurityEssentials.Wait("exists visible enabled ready", 3600)
 
         # welcome
@@ -1024,8 +930,7 @@ def run_awp_defer():
 # noinspection PyClassHasNoInit
 class ResToolWebResponder(Protocol):
     funcMap = {'A': update_heartbeat, 'B': run_cf, 'C': run_mwb, 'D': run_eset, 'E': run_sas, 'F': run_sb, 'G': run_hc,
-               'H': run_cc, 'I': run_sfc, 'J': rem_scans_defer, 'K': msc_toggle, 'L': run_mwbar, 'M': run_tdss,
-               'N': get_mse,
+               'H': run_cc, 'I': run_sfc, 'J': rem_scans, 'K': msc_toggle, 'L': run_mwbar, 'M': run_tdss, 'N': get_mse,
                'O': run_pnf, 'P': run_temp, 'Q': run_ticket, 'R': run_ipconfig, 'S': run_winsock, 'T': run_hidapters,
                'U': run_wifi, 'V': run_speed, 'W': run_netcpl, 'X': run_dism, 'Y': run_aio, 'Z': run_defrag,
                'a': run_chkdsk, 'b': run_dmc, 'c': rem_mse, 'd': run_cpl, 'e': run_reg, 'f': run_awp, 'g': stop,
@@ -1081,11 +986,11 @@ virus_scans__left.pack(side=LEFT, expand=True, pady=5, fill=X)
 # ------Middle Third
 virus_scans__center = Frame(tab__virus_scans, style='White.TFrame')
 system_cleanup_group = LabelFrame(virus_scans__center, text="Cleanup")
-cc_button = Button(system_cleanup_group, text="CCleaner", command=run_cc_defer)
+cc_button = Button(system_cleanup_group, text="CCleaner", command=run_cc_defer, state=DISABLED)
 cc_button.pack(padx=5, pady=5, fill=X)
 sfc_button = Button(system_cleanup_group, text="SFC", command=run_sfc_defer)
 sfc_button.pack(padx=5, pady=5, fill=X)
-uns_button = Button(system_cleanup_group, text="Rem. Scans", command=rem_scans_defer)
+uns_button = Button(system_cleanup_group, text="Rem. Scans", command=rem_scans, state=DISABLED)
 uns_button.pack(padx=5, pady=5, fill=X)
 system_cleanup_group.grid(row=0, sticky=N)
 msconfig_group = LabelFrame(virus_scans__center, text="Safe Mode")
