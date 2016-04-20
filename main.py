@@ -319,7 +319,7 @@ def stop():
     update_heartbeat("ResTool was closed at the request of the user.")
     log.info("ResTool was closed at the request of the user.")
     reactor.stop()
-    return 0
+    return None
 
 
 def invalidate_token():
@@ -369,12 +369,12 @@ def app_defer(function, name):
     d = threads.deferToThread(function)
     update_heartbeat("Running " + name)
     d.addCallbacks(app_callback, app_errback, errbackArgs=(name,))
-    return 0
+    return None
 
 
 # Called on app success
 def app_callback(return_text):
-    if return_text != 0:
+    if return_text is not None:
         log.info("Finished. " + return_text)
         # update Action
         post_event(return_text)
@@ -399,7 +399,7 @@ def app_errback(error, name):
 
 
 def run_cf():
-    return 0
+    return None
 
 
 def run_cf_defer():
@@ -414,40 +414,13 @@ def run_mwb():
         except UserWarning:  # bitness error
             pass
         time.sleep(2)
+        '''
         try:
             application.connect(title_re="Malwarebytes.*")
         except UserWarning:  # bitness error
             pass
         finally:
-            application.connect(title_re="Malwarebytes.*")
-
-        # Maximize MWB window and begin scan
-        application.MalwareBytesAntiMalwareHome.Restore()
-        application.MalwarebytesAntiMalwareHome.MoveWindow(0, 0, 1000, 500)
-        application.MalwarebytesAntiMalwareHome.ClickInput(coords=(493, 477))
-
-        # Gets and returns the pixel color at the specified coordinates
-        def get_color(window, x, y):
-            handle = window.handle
-            dc = GetWindowDC(handle)
-            color = int(GetPixel(dc, x, y))
-            ReleaseDC(handle, dc)
-            return (color & 0xff), ((color >> 8) & 0xff), ((color >> 16) & 0xff)
-
-        # Wait for "Finish" button to appear
-        while get_color(application.MalwareBytesAntiMalwareHome, 350, 478) != (37, 120, 230):
-            time.sleep(5)
-
-        # Copy results to clipboard
-        application.MalwarebytesAntiMalwareHome.ClickInput(coords=(900, 520))
-        application.MalwarebytesAntiMalwareHome.ClickInput(coords=(900, 540))
-        cb_results = win32clipboard.GetClipboardData()
-        num_infect = (int(cb_results.split("Processes: ")) + int(cb_results.split("Modules: ")) +
-                      int(cb_results.split("Registry Keys: ")) + int(cb_results.split("Registry Values: ")) +
-                      int(cb_results.split("Registry Data: ")) + int(cb_results.split("Folders: ")) +
-                      int(cb_results.split("Files: ")) + int(cb_results.split("Physical Sectors: ")))
-
-        return num_infect
+            application.connect(title_re="Malwarebytes.*")'''
 
     else:
         try:
@@ -478,77 +451,46 @@ def run_mwb():
         application.SetupMalwarebytesAntiMalware.Install.ClickInput()
         application.SetupMalwarebytesAntiMalware.Finish.Wait("exists enabled visible ready", 3600)
         application.SetupMalwarebytesAntiMalware.Finish.ClickInput()
-        # updating MWB, connecting to server
-        time.sleep(15)
-        try:
-            application.connect(title_re="Malwarebytes.*")
-        except UserWarning:  # bitness error
-            pass
-        finally:
-            application.connect(title_re="Malwarebytes.")
-        application.MalwarebytesAntiMalware.OK.Wait("exists enabled visible ready", 3600)
-        application.MalwarebytesAntiMalware.OK.ClickInput()
-        # install MWB updated ver
-        time.sleep(1)
-        try:
-            application.connect(title_re="Select Set*")
-        except UserWarning:  # bitness error
-            pass
-        application.SelectSetupLanguage.OK.ClickInput()
-        application.SetupMalwarebytesAntiMalware.Wait("exists enabled visible ready", 30)
-        application.SetupMalwarebytesAntiMalware.Next.ClickInput()
-        application.SetupMalwarebytesAntiMalware.Iaccepttheagreement.Wait("exists enabled visible ready", 30)
-        application.SetupMalwarebytesAntiMalware.Iaccepttheagreement.ClickInput()
-        application.SetupMalwarebytesAntiMalware.Next.Wait("exists enabled visible ready", 30)
-        application.SetupMalwarebytesAntiMalware.Next.ClickInput()
-        application.SetupMalwarebytesAntiMalware.Next.Wait("exists enabled visible ready", 30)
-        application.SetupMalwarebytesAntiMalware.Next.ClickInput()
-        application.SetupMalwarebytesAntiMalware.Next.Wait("exists enabled visible ready", 30)
-        application.SetupMalwarebytesAntiMalware.Next.ClickInput()
-        application.SetupMalwarebytesAntiMalware.Next.Wait("exists enabled visible ready", 30)
-        application.SetupMalwarebytesAntiMalware.Next.ClickInput()
-        application.SetupMalwarebytesAntiMalware.Next.Wait("exists enabled visible ready", 30)
-        application.SetupMalwarebytesAntiMalware.Next.ClickInput()
-        application.SetupMalwarebytesAntiMalware.Install.Wait("exists enabled visible ready", 30)
-        application.SetupMalwarebytesAntiMalware.Install.ClickInput()
-        application.SetupMalwarebytesAntiMalware.Finish.Wait("exists enabled visible ready", 3600)
-        application.SetupMalwarebytesAntiMalware.Finish.ClickInput()
-        # Start scan window
-        time.sleep(20)
-        try:
-            application.connect(title_re="MalwarebytesAnti*")
-        except UserWarning:  # bitness error
-            pass
-        finally:
-            application.connect(title_re="MalwarebytesAnti*")
 
-        # Maximize MWB window and begin scan
-        application.MalwareBytesAntiMalwareHome.Restore()
-        application.MalwarebytesAntiMalwareHome.MoveWindow(0, 0, 1000, 500)
-        application.MalwarebytesAntiMalwareHome.ClickInput(coords=(493, 477))
+        time.sleep(10)
 
-        # Gets and returns the pixel color at the specified coordinates
-        def get_color(window, x, y):
-            handle = window.handle
-            dc = GetWindowDC(handle)
-            color = int(GetPixel(dc, x, y))
-            ReleaseDC(handle, dc)
-            return (color & 0xff), ((color >> 8) & 0xff), ((color >> 16) & 0xff)
+    # Start scan window
+    try:
+        application.connect(title_re="Malwarebytes.*Home.*")
+    except UserWarning:  # bitness error
+        pass
+    application.MalwarebytesAntiMalwareHome.MoveWindow(0, 0, 1000, 500)
+    application.MalwarebytesAntiMalwareHome.ClickInput(coords=(493, 477))
 
-        # Wait for "Finish" button to appear
-        while get_color(application.MalwareBytesAntiMalwareHome, 350, 478) != (37, 120, 230):
-            time.sleep(5)
+    # Gets and returns the pixel color at the specified coordinates
+    def get_color(window, x, y):
+        handle = window.handle
+        dc = GetWindowDC(handle)
+        color = int(GetPixel(dc, x, y))
+        ReleaseDC(handle, dc)
+        return (color & 0xff), ((color >> 8) & 0xff), ((color >> 16) & 0xff)
 
-        # Copy results to clipboard
-        application.MalwarebytesAntiMalwareHome.ClickInput(coords=(900, 520))
-        application.MalwarebytesAntiMalwareHome.ClickInput(coords=(900, 540))
-        cb_results = win32clipboard.GetClipboardData()
-        num_infect = (int(cb_results.split("Processes: ")) + int(cb_results.split("Modules: ")) +
-                      int(cb_results.split("Registry Keys: ")) + int(cb_results.split("Registry Values: ")) +
-                      int(cb_results.split("Registry Data: ")) + int(cb_results.split("Folders: ")) +
-                      int(cb_results.split("Files: ")) + int(cb_results.split("Physical Sectors: ")))
+    # Wait for "Finish" button to appear
+    while get_color(application.MalwareBytesAntiMalwareHome, 350, 478) != (37, 120, 230):
+        time.sleep(5)
 
-        return num_infect
+    # Copy results to clipboard
+    application.MalwarebytesAntiMalwareHome.ClickInput(coords=(900, 520))
+    application.MalwarebytesAntiMalwareHome.ClickInput(coords=(900, 540))
+    win32clipboard.OpenClipboard()
+    cb_results = win32clipboard.GetClipboardData()
+    win32clipboard.CloseClipboard()
+    num_infect = (int(cb_results.split("Processes: ")[1].split('\r\n')[0]) +
+                  int(cb_results.split("Modules: ")[1].split('\r\n')[0]) +
+                  int(cb_results.split("Registry Keys: ")[1].split('\r\n')[0]) +
+                  int(cb_results.split("Registry Values: ")[1].split('\r\n')[0]) +
+                  int(cb_results.split("Registry Data: ")[1].split('\r\n')[0]) +
+                  int(cb_results.split("Folders: ")[1].split('\r\n')[0]) +
+                  int(cb_results.split("Files: ")[1].split('\r\n')[0]) +
+                  int(cb_results.split("Physical Sectors: ")[1].split('\r\n')[0])
+                  )
+
+    return num_infect
 
 
 def run_mwb_defer():
@@ -556,7 +498,7 @@ def run_mwb_defer():
 
 
 def run_eset():
-    return 0
+    return None
 
 
 def run_eset_defer():
@@ -564,7 +506,7 @@ def run_eset_defer():
 
 
 def run_sas():
-    return 0
+    return None
 
 
 def run_sas_defer():
@@ -572,7 +514,7 @@ def run_sas_defer():
 
 
 def run_sb():
-    return 0
+    return None
 
 
 def run_sb_defer():
@@ -580,7 +522,7 @@ def run_sb_defer():
 
 
 def run_hc():
-    return 0
+    return None
 
 
 def run_hc_defer():
@@ -760,11 +702,11 @@ def rem_scans_defer():
 
 def msc_toggle():
     safe_mode_tracker.toggle_safe_mode()
-    return 0
+    return None
 
 
 def run_mwbar():
-    return 0
+    return None
 
 
 def run_mwbar_defer():
@@ -772,7 +714,7 @@ def run_mwbar_defer():
 
 
 def run_tdss():
-    return 0
+    return None
 
 
 def run_tdss_defer():
@@ -860,7 +802,7 @@ def run_ticket():
         webbrowser.open("http://" + API_HOST + ".restech.niu.edu/tickets/" + ticket)
     else:
         webbrowser.open("http://" + API_HOST + ".restech.niu.edu/tickets")
-    return 0
+    return None
 
 
 def run_ipconfig():
@@ -898,7 +840,7 @@ def run_winsock_defer():
 
 
 def run_hidapters():
-    return 0
+    return None
 
 
 def run_hidapters_defer():
@@ -918,7 +860,7 @@ def run_wifi_defer():
 
 def run_speed():
     webbrowser.open("http://speedtest.niu.edu")
-    return 0
+    return None
 
 
 def run_netcpl():
@@ -967,7 +909,7 @@ def run_dism_defer():
 
 
 def run_aio():
-    return 0
+    return None
 
 
 def run_aio_defer():
@@ -1018,7 +960,7 @@ def run_dmc():
 
 
 def rem_mse():
-    return 0
+    return None
 
 
 def rem_mse_defer():
@@ -1037,7 +979,7 @@ def run_reg():
         subprocess.check_call(['regedit.exe'])
     except subprocess.CalledProcessError:
         log.error("Could not launch Registry Editor")
-    return 0
+    return None
 
 
 def run_awp():
