@@ -414,14 +414,6 @@ def run_mwb():
         except UserWarning:  # bitness error
             pass
         time.sleep(2)
-        '''
-        try:
-            application.connect(title_re="Malwarebytes.*")
-        except UserWarning:  # bitness error
-            pass
-        finally:
-            application.connect(title_re="Malwarebytes.*")'''
-
     else:
         try:
             application.Start("programs/MWB.exe")
@@ -452,7 +444,7 @@ def run_mwb():
         application.SetupMalwarebytesAntiMalware.Finish.Wait("exists enabled visible ready", 3600)
         application.SetupMalwarebytesAntiMalware.Finish.ClickInput()
 
-        time.sleep(10)
+        time.sleep(15)
 
     # Start scan window
     try:
@@ -498,7 +490,51 @@ def run_mwb_defer():
 
 
 def run_eset():
-    return None
+    app = Application()
+    try:
+        app.Start("programs/ESET.exe")
+    except UserWarning:  #bitness error
+        pass
+    time.sleep(0.5)
+    try:
+        app.connect(title_re="Terms.*")
+    except UserWarning:  #bitness error
+        pass
+    app.Termsofuse.YesIaccepttheTermsOfUse.Wait("exists enabled visible ready", 30)
+    app.Termsofuse.YesIaccepttheTermsOfUse.ClickInput()
+    app.Termsofuse.Start.Wait("exists enabled visible ready", 30)
+    app.Termsofuse.Start.ClickInput()
+    time.sleep(5)
+    try:
+        app.connect(title_re="ESET.*")
+    except UserWarning:  # bitness error
+        pass
+    time.sleep(0.5)
+    app.ESETOnlineScanner.Enableprotectionofpotentiallyunwantedapplications.Wait("exists enabled visible ready", 30)
+    app.ESETOnlineScanner.Enableprotectionofpotentiallyunwantedapplications.ClickInput()
+    app.ESETOnlineScanner.Start.Wait("exists enabled visible ready", 30)
+    app.ESETOnlineScanner.Start.ClickInput()
+
+    # Wait for scan to finish
+    app.ESETOnlineScanner.Uninstallapplicationonclose.Wait("exists enabled visible ready",7200)
+
+    # Grab number of infected from file
+    file = open('C:\Program Files (x86)\ESET\ESET Online Scanner\log.txt').read()
+    num_cleaned = file.split(("# cleaned=")[1].split('\r\n')[0])
+    num_found = file.split(("# found=")[1].split('\r\n')[0])
+    time.sleep(0.5)
+
+    # Check if found = cleaned
+    print(num_cleaned)
+    print(num_found)
+    if num_cleaned != num_found:
+        raise ValueError("Not all infected files were able to be cleaned!")
+
+    app.ESETOnlineScanner.Uninstallapplicationonclose.ClickInput()
+    app.ESETOnlineScanner.Finish.Wait("exists enabled visible ready", 30)
+    app.ESETOnlineScanner.Finish.ClickInput()
+    if app.ESETOnlineScanner.Close():
+        return num_found
 
 
 def run_eset_defer():
@@ -1062,7 +1098,7 @@ cf_button = Button(av_scanners_group, text="ComboFix", command=run_cf_defer, sta
 cf_button.pack(padx=5, pady=5, fill=X)
 mwb_button = Button(av_scanners_group, text="Malwarebytes", command=run_mwb_defer)
 mwb_button.pack(padx=5, pady=5, fill=X)
-eset_button = Button(av_scanners_group, text="ESET", command=run_eset_defer, state=DISABLED)
+eset_button = Button(av_scanners_group, text="ESET", command=run_eset_defer)
 eset_button.pack(padx=5, pady=5, fill=X)
 sas_button = Button(av_scanners_group, text="SAS", command=run_sas_defer, state=DISABLED)
 sas_button.pack(padx=5, pady=5, fill=X)
