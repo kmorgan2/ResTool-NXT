@@ -413,7 +413,7 @@ def run_mwb():
             application.start("C:\Program Files (x86)\Malwarebytes Anti-Malware\mbam.exe")
         except UserWarning:  # bitness error
             pass
-        time.sleep(2)
+        time.sleep(3)
     else:
         try:
             application.Start("programs/MWB.exe")
@@ -451,7 +451,6 @@ def run_mwb():
         application.connect(title_re="Malwarebytes.*Home.*")
     except UserWarning:  # bitness error
         pass
-    application.MalwarebytesAntiMalwareHome.MoveWindow(0, 0, 1000, 500)
     application.MalwarebytesAntiMalwareHome.ClickInput(coords=(493, 477))
 
     # Gets and returns the pixel color at the specified coordinates
@@ -467,22 +466,26 @@ def run_mwb():
         time.sleep(5)
 
     # Copy results to clipboard
-    application.MalwarebytesAntiMalwareHome.ClickInput(coords=(900, 520))
-    application.MalwarebytesAntiMalwareHome.ClickInput(coords=(900, 540))
+    application.MalwarebytesAntiMalwareHome.ClickInput(coords=(800, 520))
+    application.MalwarebytesAntiMalwareHome.TypeKeys("{DOWN}{ENTER}")
+    time.sleep(0.1)
     win32clipboard.OpenClipboard()
     cb_results = win32clipboard.GetClipboardData()
     win32clipboard.CloseClipboard()
-    num_infect = (int(cb_results.split("Processes: ")[1].split('\r\n')[0]) +
-                  int(cb_results.split("Modules: ")[1].split('\r\n')[0]) +
-                  int(cb_results.split("Registry Keys: ")[1].split('\r\n')[0]) +
-                  int(cb_results.split("Registry Values: ")[1].split('\r\n')[0]) +
-                  int(cb_results.split("Registry Data: ")[1].split('\r\n')[0]) +
-                  int(cb_results.split("Folders: ")[1].split('\r\n')[0]) +
-                  int(cb_results.split("Files: ")[1].split('\r\n')[0]) +
-                  int(cb_results.split("Physical Sectors: ")[1].split('\r\n')[0])
-                  )
 
-    return num_infect
+    txtList = [(cb_results.split("Processes: ")[1].split('\r\n')[0]),
+                (cb_results.split("Modules: ")[1].split('\r\n')[0]),
+                (cb_results.split("Registry Keys: ")[1].split('\r\n')[0]),
+                (cb_results.split("Registry Values: ")[1].split('\r\n')[0]),
+                (cb_results.split("Registry Data: ")[1].split('\r\n')[0]),
+                (cb_results.split("Folders: ")[1].split('\r\n')[0]),
+                (cb_results.split("Files: ")[1].split('\r\n')[0]),
+                (cb_results.split("Physical Sectors: ")[1].split('\r\n')[0])
+                ]
+
+    application.MalwarebytesAntiMalwareHome.Close()
+    num_infect = sum([int(x) for x in txtList])
+    return str(num_infect) + " detections."
 
 
 def run_mwb_defer():
@@ -504,7 +507,7 @@ def run_eset():
     app.Termsofuse.YesIaccepttheTermsOfUse.ClickInput()
     app.Termsofuse.Start.Wait("exists enabled visible ready", 30)
     app.Termsofuse.Start.ClickInput()
-    time.sleep(5)
+    time.sleep(7)
     try:
         app.connect(title_re="ESET.*")
     except UserWarning:  # bitness error
@@ -520,8 +523,8 @@ def run_eset():
 
     # Grab number of infected from file
     file = open('C:\Program Files (x86)\ESET\ESET Online Scanner\log.txt').read()
-    num_cleaned = file.split(("# cleaned=")[1].split('\r\n')[0])
-    num_found = file.split(("# found=")[1].split('\r\n')[0])
+    num_cleaned = file.split(("# cleaned=")[1].split('\n')[0])
+    num_found = file.split(("# found=")[1].split('\n')[0])
     time.sleep(0.5)
 
     # Check if found = cleaned
@@ -534,7 +537,7 @@ def run_eset():
     app.ESETOnlineScanner.Finish.Wait("exists enabled visible ready", 30)
     app.ESETOnlineScanner.Finish.ClickInput()
     if app.ESETOnlineScanner.Close():
-        return num_found
+        return str(num_found) + " detections."
 
 
 def run_eset_defer():
