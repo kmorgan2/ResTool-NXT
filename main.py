@@ -545,6 +545,60 @@ def run_eset_defer():
 
 
 def run_sas():
+    app = Application()
+    try:
+        app.Start("programs/SAS.exe")
+    except UserWarning:  # bitness error
+        pass
+    time.sleep(1)
+    try:
+        app.connect(title_re="SUPERAntiSpyware.*")
+    except UserWarning:  # bitness error
+        pass
+    app.SUPERAntiSpywareFreeEditionSetup.Next.Wait("exists enabled visible ready", 30)
+    app.SUPERAntiSpywareFreeEditionSetup.Next.ClickInput()
+    app.SUPERAntiSpywareFreeEditionSetup.IAgree.Wait("exists enabled visible ready", 30)
+    app.SUPERAntiSpywareFreeEditionSetup.IAgree.ClickInput()
+    app.SUPERAntiSpywareFreeEditionSetup.Onlyformecurrentuser.Wait("exists enabled visible ready", 30)
+    app.SUPERAntiSpywareFreeEditionSetup.Onlyformecurrentuser.ClickInput()
+    app.SUPERAntiSpywareFreeEditionSetup.Next.Wait("exists enabled visible ready", 30)
+    app.SUPERAntiSpywareFreeEditionSetup.Next.ClickInput()
+    app.SUPERAntiSpywareFreeEditionSetup.Next.Wait("exists enabled visible ready", 30)
+    app.SUPERAntiSpywareFreeEditionSetup.Next.ClickInput()
+    app.SUPERAntiSpywareFreeEditionSetup.Next.Wait("exists enabled visible ready", 30)
+    app.SUPERAntiSpywareFreeEditionSetup.Next.ClickInput()
+    app.SUPERAntiSpywareFreeEditionSetup.Finished.Wait("exists enabled visible ready", 30)
+    app.SUPERAntiSpywareFreeEditionSetup.Finished.ClickInput()
+    time.sleep(4)
+    try:
+        app.connect(title_re=".*Trial*").connect(title_re=".*Trial*")
+    except UserWarning:  # bitness error
+        pass
+    finally:
+        app.connect(title_re=".*Trial*")
+    app.SUPERAntiSpywareProfessionalTrial.Decline.Wait("exists enabled visible ready", 30)
+    app.SUPERAntiSpywareProfessionalTrial.Decline.ClickInput
+    time.sleep(2)
+    try:
+        app.connect(title_re=".*Edition")
+    except UserWarning:  # bitness error
+        pass
+    # Click scan
+    app.SUPERAntiSpywareFreeEdition[u'5'].ClickInput()
+    app.SUPERAntiSpywareFreeEdition.ClickInput(coords=(500, 150))
+
+    # Gets and returns the pixel color at the specified coordinates
+    def get_color(window, x, y):
+        handle = window.handle
+        dc = GetWindowDC(handle)
+        color = int(GetPixel(dc, x, y))
+        ReleaseDC(handle, dc)
+        return (color & 0xff), ((color >> 8) & 0xff), ((color >> 16) & 0xff)
+
+    # Wait for "Finish" button to appear
+    while get_color(app.MalwareBytesAntiMalwareHome, 350, 478) != (49, 58, 63):
+        time.sleep(5)
+
     return None
 
 
@@ -1103,7 +1157,7 @@ mwb_button = Button(av_scanners_group, text="Malwarebytes", command=run_mwb_defe
 mwb_button.pack(padx=5, pady=5, fill=X)
 eset_button = Button(av_scanners_group, text="ESET", command=run_eset_defer)
 eset_button.pack(padx=5, pady=5, fill=X)
-sas_button = Button(av_scanners_group, text="SAS", command=run_sas_defer, state=DISABLED)
+sas_button = Button(av_scanners_group, text="SAS", command=run_sas_defer)
 sas_button.pack(padx=5, pady=5, fill=X)
 sb_button = Button(av_scanners_group, text="Spybot", command=run_sb_defer, state=DISABLED)
 sb_button.pack(padx=5, pady=5, fill=X)
