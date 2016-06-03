@@ -9,10 +9,11 @@
 
 # GUI Imports
 from Tkinter import *
-from ttk import *
+from ttk import Style, Progressbar, Notebook, Frame as TTKFrame, LabelFrame as TTKLabelFrame, Button as TTKButton, \
+    Entry as TTKEntry, Label as TTKLabel
 
 # Network/Web Imports
-from twisted.internet import tksupport, reactor, threads
+from twisted.internet import tksupport, reactor, threads, task
 from twisted.internet.protocol import Protocol, Factory
 # from twisted.internet.endpoints import TCP4ServerEndpoint
 from twisted.logger import Logger, textFileLogObserver
@@ -39,7 +40,7 @@ import io
 # THE ALMIGHTY DEBUG FLAG. SET THIS TO TRUE WITH GREAT CAUTION
 DEBUG = True
 # THE LESS ALMIGHTY NO_POST FLAG. SET THIS TO TRUE UNTIL WE GET OUR API ENDPOINTS AND DEV ACCESS
-NO_POST = True
+NO_POST = False
 
 # Logging
 # noinspection PyTypeChecker
@@ -52,9 +53,9 @@ if DEBUG:
 API_BASE = "http://" + API_HOST + ".restech.niu.edu/tickets/api/restool"
 API_HEARTBEATS = API_BASE + "/heartbeats"
 API_EVENTS = API_BASE + "/events"
-API_TOKENS = API_BASE + "/token"
+API_TOKENS = API_BASE + "/tokens"
 
-EXPIRE_SECONDS = 30
+EXPIRE_SECONDS = 60
 
 heartbeat = "Idle"
 
@@ -100,35 +101,40 @@ def default_status_area():
 
 # A class encapsulation of the token dialog
 class TokenDialog:
-    def __init__(self, parent):
+    def __init__(self, parent, token_mgr):
+        self.token_manager = token_mgr
         self.token = None
         top = self.top = Toplevel(parent)
-        self.top.title("New Ticket Dialog")
+        self.top.title("Enter ResTool Token")
         self.top.iconbitmap('icon.ico')  # icon is icon
 
-        Label(top, text="Token:").grid(row=0, column=0)
-        self.num = Entry(top)
+        self.label = TTKLabel(top, text="Token:")
+        self.label.grid(row=0, column=0)
+        self.num = TTKEntry(top)
         self.num.grid(padx=5, row=0, column=1)
 
-        b = Button(top, text="OK", command=self.ok)
+        Style().configure("Error.TLabel", foreground='red')
+
+        b = TTKButton(top, text="OK", command=self.ok)
         b.grid(pady=5, columnspan=2)
 
     def ok(self):
         if self.num.get():
             self.token = self.num.get()
-            self.top.destroy()
+            if self.token_manager.validate_token(self.token):
+                self.top.destroy()
+            else:
+                self.num.delete(0, END)
+                self.label.configure(style="Error.TLabel")
 
     def get_token(self):
         return self.token
 
 
 # A class encapsulation of the status bar
-
-
-# noinspection PyCallByClass,PyTypeChecker
 class ResToolStatusBar(Frame):
-    def __init__(self, master):
-        Frame.__init__(self, master)
+    def __init__(self, master, **kw):
+        Frame.__init__(self, master, **kw)
         # Display Windows version in leftmost box
         self.version_text = StringVar(value="Undefined")
         self.set_version()
@@ -188,10 +194,26 @@ class Token:
         if NO_POST and not self.token:  # it's not in the registry, but we are offline
             self.set_token("Offline")
         elif not self.token:  # try to get it from the user
-            td = TokenDialog(root)
-            root.wait_window(td.top)
-            self.set_token(td.get_token())
+            self.record_token()
+
+    def record_token(self):
+        global NO_POST
+        td = TokenDialog(root, self)
+        root.wait_window(td.top)
+        self.set_token(td.get_token())
+        if not self.validate_token():
+            self.set_token("Offline")
+            NO_POST = True
+            log.error("No valid token supplied; user exited prompt. Operating offline.")
+        else:
             log.info("Token {token} recorded from user", token=self.token)
+
+    def validate_token(self, token=None):
+        if not token:
+            token = self.token
+        if token and (token == "Offline" or NO_POST):
+            return True
+        return requests.get(API_TOKENS + "/" + token).status_code == 200
 
     def get_token(self):
         if not self.token:
@@ -200,6 +222,8 @@ class Token:
             except (WindowsError, KeyError):  # The Token Value in the ResTech does not exist. Return placeholder text.
                 self.token = None
                 log.error("Attempt to get token when none was initialized or stored.")
+        if not self.validate_token():
+            self.record_token()
         return self.token
 
     def set_token(self, value):
@@ -271,18 +295,18 @@ class SafeModeTracker:
 # --------------------------------------------------- API Functions ----------------------------------------------------
 
 
-def update_heartbeat(text):
+def update_heartbeat(text, expire_seconds=EXPIRE_SECONDS):
     global heartbeat
     heartbeat = text
-    post_heartbeat()
+    post_heartbeat(expire_seconds)
 
 
-def post_heartbeat():
+def post_heartbeat(expire_seconds=EXPIRE_SECONDS):
     global heartbeat, API_HEARTBEATS
     if not NO_POST and token_manager.get_token():
         response = requests.post(API_HEARTBEATS,
                                  {'token': token_manager.get_token(), 'status': heartbeat,
-                                  'expire_seconds': EXPIRE_SECONDS})
+                                  'expire_seconds': expire_seconds})
         try:
             assert response.status_code == 200
         except AssertionError:  # Error posting the heartbeat
@@ -292,7 +316,7 @@ def post_heartbeat():
                 log.error('Invalid data when posting heartbeat "{heartbeat}"', heartbea=heartbeat)
             else:  # Uncaught (500, 404, etc)
                 log.error('Uncaught HTTP Error {rc}. token in POST heartbeats: with token: {t}, heartbeat:"{h}",' +
-                          'and expire_seconds: {e}', t=token_manager.get_token(), h=heartbeat, e=EXPIRE_SECONDS)
+                          'and expire_seconds: {e}', t=token_manager.get_token(), h=heartbeat, e=expire_seconds)
         return response.status_code
     return "Offline"
 
@@ -316,7 +340,7 @@ def post_event(text):
 
 
 def stop():
-    update_heartbeat("ResTool was closed at the request of the user.")
+    update_heartbeat("ResTool was closed at the request of the user.", 3600)
     log.info("ResTool was closed at the request of the user.")
     reactor.stop()
     return None
@@ -324,7 +348,7 @@ def stop():
 
 def invalidate_token():
     if not NO_POST:
-        response = requests.post(API_EVENTS + "/" + token_manager.get_token(), {'action': 'invalidate'})
+        response = requests.post(API_TOKENS + "/" + token_manager.get_token(), {'action': 'invalidate'})
         try:
             assert response.status_code == 200
         except AssertionError:  # Error posting the event
@@ -342,10 +366,10 @@ def invalidate_token():
 
 def get_ticket():
     if not NO_POST:
-        response = requests.get(API_EVENTS + "/" + token_manager.get_token())
+        response = requests.get(API_TOKENS + "/" + token_manager.get_token())
         try:
             assert response.status_code == 200
-            ticket = response.json()['ticket']
+            ticket = response.json()['ticket']['id']
             return ticket
         except AssertionError:
             if response.status_code == 404:
@@ -454,10 +478,10 @@ def run_mwb():
     application.MalwarebytesAntiMalwareHome.ClickInput(coords=(493, 477))
 
     # Gets and returns the pixel color at the specified coordinates
-    def get_color(window, x, y):
+    def get_color(window, xpos, ypos):
         handle = window.handle
         dc = GetWindowDC(handle)
-        color = int(GetPixel(dc, x, y))
+        color = int(GetPixel(dc, xpos, ypos))
         ReleaseDC(handle, dc)
         return (color & 0xff), ((color >> 8) & 0xff), ((color >> 16) & 0xff)
 
@@ -473,7 +497,7 @@ def run_mwb():
     cb_results = win32clipboard.GetClipboardData()
     win32clipboard.CloseClipboard()
 
-    txtList = [(cb_results.split("Processes: ")[1].split('\r\n')[0]),
+    txt_list = [(cb_results.split("Processes: ")[1].split('\r\n')[0]),
                 (cb_results.split("Modules: ")[1].split('\r\n')[0]),
                 (cb_results.split("Registry Keys: ")[1].split('\r\n')[0]),
                 (cb_results.split("Registry Values: ")[1].split('\r\n')[0]),
@@ -484,7 +508,7 @@ def run_mwb():
                 ]
 
     application.MalwarebytesAntiMalwareHome.Close()
-    num_infect = sum([int(x) for x in txtList])
+    num_infect = sum([int(x) for x in txt_list])
     return str(num_infect) + " detections."
 
 
@@ -496,12 +520,12 @@ def run_eset():
     app = Application()
     try:
         app.Start("programs/ESET.exe")
-    except UserWarning:  #bitness error
+    except UserWarning:  # bitness error
         pass
     time.sleep(0.5)
     try:
         app.connect(title_re="Terms.*")
-    except UserWarning:  #bitness error
+    except UserWarning:  # bitness error
         pass
     app.Termsofuse.YesIaccepttheTermsOfUse.Wait("exists enabled visible ready", 30)
     app.Termsofuse.YesIaccepttheTermsOfUse.ClickInput()
@@ -519,19 +543,22 @@ def run_eset():
     app.ESETOnlineScanner.Start.ClickInput()
 
     # Wait for scan to finish
-    app.ESETOnlineScanner.Uninstallapplicationonclose.Wait("exists enabled visible ready",7200)
+    app.ESETOnlineScanner.Uninstallapplicationonclose.Wait("exists enabled visible ready", 7200)
 
     # Grab number of infected from file
-    file = open('C:\Program Files (x86)\ESET\ESET Online Scanner\log.txt').read()
-    num_cleaned = file.split(("# cleaned=")[1].split('\n')[0])
-    num_found = file.split(("# found=")[1].split('\n')[0])
+    eset_logfile = open('C:\Program Files (x86)\ESET\ESET Online Scanner\log.txt')
+    eset_logfile_text = eset_logfile.read()
+    num_cleaned = eset_logfile_text.split("# cleaned=")[1].split('\n')[0]
+    num_found = eset_logfile_text.split("# found=")[1].split('\n')[0]
+    eset_logfile.close()
     time.sleep(0.5)
 
     # Check if found = cleaned
     print(num_cleaned)
     print(num_found)
     if num_cleaned != num_found:
-        raise ValueError("Not all infected files were able to be cleaned!")
+        raise ValueError(
+            "Not all infected files were able to be cleaned!\n\tFound:" + num_found + "\n\tCleaned" + num_cleaned)
 
     app.ESETOnlineScanner.Uninstallapplicationonclose.ClickInput()
     app.ESETOnlineScanner.Finish.Wait("exists enabled visible ready", 30)
@@ -577,7 +604,7 @@ def run_sas():
     finally:
         app.connect(title_re=".*Trial*")
     app.SUPERAntiSpywareProfessionalTrial.Decline.Wait("exists enabled visible ready", 30)
-    app.SUPERAntiSpywareProfessionalTrial.Decline.ClickInput
+    app.SUPERAntiSpywareProfessionalTrial.Decline.ClickInput()
     time.sleep(2)
     try:
         app.connect(title_re=".*Edition")
@@ -615,6 +642,21 @@ def run_sb_defer():
 
 
 def run_hc():
+    application = Application().start("programs/HC.exe")
+    time.sleep(2.0)
+    application = application.connect(class_name_re="#32770", title=u'')  # connect to window
+    application.Dialog[u'4'].ClickInput(coords=(35, 315))  # accept EULA
+    application.Dialog[u'4'].ClickInput(coords=(550, 360))  # click OK
+
+    application.Dialog[u'4'].ClickInput(coords=(460, 220))  # Click Settings
+
+    application.Dialog[u'5'].ClickInput(coords=(25, 115))  # Click Full Scan
+    application.Dialog[u'5'].ClickInput(coords=(300, 360))  # Click OK
+
+    application.Dialog[u'4'].ClickInput(coords=(460, 150))  # Click Scan Now
+
+    # Wait for scan completion
+
     return None
 
 
@@ -1147,135 +1189,135 @@ class ResToolWebResponderFactory(Factory):
 root_notebook = Notebook(root)
 
 # ----Tab: Virus Scans
-tab__virus_scans = Frame(style='White.TFrame')
+tab__virus_scans = TTKFrame(style='White.TFrame')
 # ------Left Third
-virus_scans__left = Frame(tab__virus_scans, style='White.TFrame')
-av_scanners_group = LabelFrame(virus_scans__left, text="AV Scans")
-cf_button = Button(av_scanners_group, text="ComboFix", command=run_cf_defer, state=DISABLED)
+virus_scans__left = TTKFrame(tab__virus_scans, style='White.TFrame')
+av_scanners_group = TTKLabelFrame(virus_scans__left, text="AV Scans")
+cf_button = TTKButton(av_scanners_group, text="ComboFix", command=run_cf_defer, state=DISABLED)
 cf_button.pack(padx=5, pady=5, fill=X)
-mwb_button = Button(av_scanners_group, text="Malwarebytes", command=run_mwb_defer)
+mwb_button = TTKButton(av_scanners_group, text="Malwarebytes", command=run_mwb_defer)
 mwb_button.pack(padx=5, pady=5, fill=X)
-eset_button = Button(av_scanners_group, text="ESET", command=run_eset_defer)
+eset_button = TTKButton(av_scanners_group, text="ESET", command=run_eset_defer)
 eset_button.pack(padx=5, pady=5, fill=X)
-sas_button = Button(av_scanners_group, text="SAS", command=run_sas_defer)
+sas_button = TTKButton(av_scanners_group, text="SAS", command=run_sas_defer)
 sas_button.pack(padx=5, pady=5, fill=X)
-sb_button = Button(av_scanners_group, text="Spybot", command=run_sb_defer, state=DISABLED)
+sb_button = TTKButton(av_scanners_group, text="Spybot", command=run_sb_defer, state=DISABLED)
 sb_button.pack(padx=5, pady=5, fill=X)
-hc_button = Button(av_scanners_group, text="HouseCall", command=run_hc_defer, state=DISABLED)
+hc_button = TTKButton(av_scanners_group, text="HouseCall", command=run_hc_defer, state=DISABLED)
 hc_button.pack(padx=5, pady=5, fill=X)
 av_scanners_group.grid(sticky=N)
 virus_scans__left.pack(side=LEFT, expand=True, pady=5, fill=X)
 # ------Middle Third
-virus_scans__center = Frame(tab__virus_scans, style='White.TFrame')
-system_cleanup_group = LabelFrame(virus_scans__center, text="Cleanup")
-cc_button = Button(system_cleanup_group, text="CCleaner", command=run_cc_defer)
+virus_scans__center = TTKFrame(tab__virus_scans, style='White.TFrame')
+system_cleanup_group = TTKLabelFrame(virus_scans__center, text="Cleanup")
+cc_button = TTKButton(system_cleanup_group, text="CCleaner", command=run_cc_defer)
 cc_button.pack(padx=5, pady=5, fill=X)
-sfc_button = Button(system_cleanup_group, text="SFC", command=run_sfc_defer)
+sfc_button = TTKButton(system_cleanup_group, text="SFC", command=run_sfc_defer)
 sfc_button.pack(padx=5, pady=5, fill=X)
-uns_button = Button(system_cleanup_group, text="Rem. Scans", command=rem_scans_defer)
+uns_button = TTKButton(system_cleanup_group, text="Rem. Scans", command=rem_scans_defer)
 uns_button.pack(padx=5, pady=5, fill=X)
 system_cleanup_group.grid(row=0, sticky=N)
-msconfig_group = LabelFrame(virus_scans__center, text="Safe Mode")
-msc_button = Button(msconfig_group, text="Enable", command=msc_toggle)
+msconfig_group = TTKLabelFrame(virus_scans__center, text="Safe Mode")
+msc_button = TTKButton(msconfig_group, text="Enable", command=msc_toggle)
 msc_button.pack(padx=5, pady=5, fill=X)
 msconfig_group.grid(row=1, sticky=N)
 virus_scans__center.pack(side=LEFT, expand=True, anchor=N, pady=5, fill=X)
 # ------Right Third
-virus_scans__right = Frame(tab__virus_scans, style='White.TFrame')
-rootkit_group = LabelFrame(virus_scans__right, text="Rootkit")
-mwbar_button = Button(rootkit_group, text="MWBAR", command=run_mwbar_defer, state=DISABLED)
+virus_scans__right = TTKFrame(tab__virus_scans, style='White.TFrame')
+rootkit_group = TTKLabelFrame(virus_scans__right, text="Rootkit")
+mwbar_button = TTKButton(rootkit_group, text="MWBAR", command=run_mwbar_defer, state=DISABLED)
 mwbar_button.pack(padx=5, pady=5, fill=X)
-tdss_button = Button(rootkit_group, text="TDSS", command=run_tdss_defer, state=DISABLED)
+tdss_button = TTKButton(rootkit_group, text="TDSS", command=run_tdss_defer, state=DISABLED)
 tdss_button.pack(padx=5, pady=5, fill=X)
 rootkit_group.grid(row=0)
-misc_group = LabelFrame(virus_scans__right, text="Misc.")
-mse_button = Button(misc_group, text="Inst. MSE", command=get_mse_defer)
+misc_group = TTKLabelFrame(virus_scans__right, text="Misc.")
+mse_button = TTKButton(misc_group, text="Inst. MSE", command=get_mse_defer)
 mse_button.pack(padx=5, pady=5, fill=X)
-progs_button = Button(misc_group, text="Prog&Feat", command=run_pnf)
+progs_button = TTKButton(misc_group, text="Prog&Feat", command=run_pnf)
 progs_button.pack(padx=5, pady=5, fill=X)
-tfr_button = Button(misc_group, text="Temp Files", command=run_temp_defer)
+tfr_button = TTKButton(misc_group, text="Temp Files", command=run_temp_defer)
 tfr_button.pack(padx=5, pady=5, fill=X)
-tic_button = Button(misc_group, text="Ticket", command=run_ticket)
+tic_button = TTKButton(misc_group, text="Ticket", command=run_ticket)
 tic_button.pack(padx=5, pady=5, fill=X)
 misc_group.grid(row=1)
 virus_scans__right.pack(side=LEFT, expand=True, pady=5, fill=X)
 root_notebook.add(tab__virus_scans, text="Virus Scans")
 
 # ----Tab:OS Troubleshooting
-tab__os_troubleshooting = Frame(style='White.TFrame')
+tab__os_troubleshooting = TTKFrame(style='White.TFrame')
 # ------Left Third
-os_troubleshooting__left = Frame(tab__os_troubleshooting, style='White.TFrame')
-network_group = LabelFrame(os_troubleshooting__left, text="Network")
-ipc_button = Button(network_group, text="IPConfig", command=run_ipconfig_defer)
+os_troubleshooting__left = TTKFrame(tab__os_troubleshooting, style='White.TFrame')
+network_group = TTKLabelFrame(os_troubleshooting__left, text="Network")
+ipc_button = TTKButton(network_group, text="IPConfig", command=run_ipconfig_defer)
 ipc_button.pack(padx=5, pady=5, fill=X)
-wsr_button = Button(network_group, text="Winsock", command=run_winsock_defer)
+wsr_button = TTKButton(network_group, text="Winsock", command=run_winsock_defer)
 wsr_button.pack(padx=5, pady=5, fill=X)
-had_button = Button(network_group, text="Hid. Adapters", command=run_hidapters_defer, state=DISABLED)
+had_button = TTKButton(network_group, text="Hid. Adapters", command=run_hidapters_defer, state=DISABLED)
 had_button.pack(padx=5, pady=5, fill=X)
-wzc_button = Button(network_group, text="NIUwireless", command=run_wifi_defer)
+wzc_button = TTKButton(network_group, text="NIUwireless", command=run_wifi_defer)
 wzc_button.pack(padx=5, pady=5, fill=X)
-sts_button = Button(network_group, text="Speedtest", command=run_speed)
+sts_button = TTKButton(network_group, text="Speedtest", command=run_speed)
 sts_button.pack(padx=5, pady=5, fill=X)
-ncp_button = Button(network_group, text="Network Cpl.", command=run_netcpl)
+ncp_button = TTKButton(network_group, text="Network Cpl.", command=run_netcpl)
 ncp_button.pack(padx=5, pady=5, fill=X)
 network_group.pack()
 os_troubleshooting__left.pack(side=LEFT, expand=True, fill=X, pady=5)
 # ------Middle Third
-os_troubleshooting__center = Frame(tab__os_troubleshooting, style='White.TFrame')
-system_group = LabelFrame(os_troubleshooting__center, text="System")
-sfc2_button = Button(system_group, text="SFC", command=run_sfc_defer)
+os_troubleshooting__center = TTKFrame(tab__os_troubleshooting, style='White.TFrame')
+system_group = TTKLabelFrame(os_troubleshooting__center, text="System")
+sfc2_button = TTKButton(system_group, text="SFC", command=run_sfc_defer)
 sfc2_button.pack(padx=5, pady=5, fill=X)
-dism_button = Button(system_group, text="DISM", command=run_dism_defer)
+dism_button = TTKButton(system_group, text="DISM", command=run_dism_defer)
 dism_button.pack(padx=5, pady=5, fill=X)
-aio_button = Button(system_group, text="All in One", command=run_aio_defer, state=DISABLED)
+aio_button = TTKButton(system_group, text="All in One", command=run_aio_defer, state=DISABLED)
 aio_button.pack(padx=5, pady=5, fill=X)
-dfg_button = Button(system_group, text="Defragment", command=run_defrag_defer)
+dfg_button = TTKButton(system_group, text="Defragment", command=run_defrag_defer)
 dfg_button.pack(padx=5, pady=5, fill=X)
-ckd_button = Button(system_group, text="Disk Check", command=run_chkdsk_defer)
+ckd_button = TTKButton(system_group, text="Disk Check", command=run_chkdsk_defer)
 ckd_button.pack(padx=5, pady=5, fill=X)
-dmc_button = Button(system_group, text="Device Mgmt.", command=run_dmc)
+dmc_button = TTKButton(system_group, text="Device Mgmt.", command=run_dmc)
 dmc_button.pack(padx=5, pady=5, fill=X)
 system_group.pack()
 os_troubleshooting__center.pack(side=LEFT, expand=True, fill=X, pady=5)
 # ------Right Third
-os_troubleshooting__right = Frame(tab__os_troubleshooting, style='White.TFrame')
-miscellaneous_group = LabelFrame(os_troubleshooting__right, text="Miscellaneous")
-rmse_button = Button(miscellaneous_group, text="Remove MSE", command=rem_mse_defer, state=DISABLED)
+os_troubleshooting__right = TTKFrame(tab__os_troubleshooting, style='White.TFrame')
+miscellaneous_group = TTKLabelFrame(os_troubleshooting__right, text="Miscellaneous")
+rmse_button = TTKButton(miscellaneous_group, text="Remove MSE", command=rem_mse_defer, state=DISABLED)
 rmse_button.pack(padx=5, pady=5, fill=X)
-cpl_button = Button(miscellaneous_group, text="Control Panel", command=run_cpl)
+cpl_button = TTKButton(miscellaneous_group, text="Control Panel", command=run_cpl)
 cpl_button.pack(padx=5, pady=5, fill=X)
-reg_button = Button(miscellaneous_group, text="Registry", command=run_reg)
+reg_button = TTKButton(miscellaneous_group, text="Registry", command=run_reg)
 reg_button.pack(padx=5, pady=5, fill=X)
-awp_button = Button(miscellaneous_group, text="Pharos", command=run_awp_defer)
+awp_button = TTKButton(miscellaneous_group, text="Pharos", command=run_awp_defer)
 awp_button.pack(padx=5, pady=5, fill=X)
 miscellaneous_group.pack()
 os_troubleshooting__right.pack(side=LEFT, expand=True, fill=X, pady=5)
 root_notebook.add(tab__os_troubleshooting, text="OS Troubleshooting")
 
 # ----Tab:Removal Tools
-tab__removal_tools = Frame(style='White.TFrame')
+tab__removal_tools = TTKFrame(style='White.TFrame')
 # ------Left Third
-removal_tools__left = Frame(tab__removal_tools, style='White.TFrame')
+removal_tools__left = TTKFrame(tab__removal_tools, style='White.TFrame')
 removal_tools__left.pack(side=LEFT, expand=True)
 # ------Middle Third
-removal_tools__center = Frame(tab__removal_tools, style='White.TFrame')
+removal_tools__center = TTKFrame(tab__removal_tools, style='White.TFrame')
 removal_tools__center.pack(side=LEFT, expand=True)
 # ------Right Third
-removal_tools__right = Frame(tab__removal_tools, style='White.TFrame')
+removal_tools__right = TTKFrame(tab__removal_tools, style='White.TFrame')
 removal_tools__right.pack(side=LEFT, expand=True)
 root_notebook.add(tab__removal_tools, text="Removal Tools")
 
 # ----Tab:Auto
-tab__auto = Frame(style='White.TFrame')
+tab__auto = TTKFrame(style='White.TFrame')
 root_notebook.add(tab__auto, text="Auto")
 root_notebook.grid(row=0)
 
-root_empty_space = Frame()
+root_empty_space = TTKFrame()
 root_empty_space.grid(row=1, pady=5)
 root_progressbar = Progressbar(root, mode="indeterminate")
 root_progressbar.grid(row=2, sticky=E + W, padx=10)
 root_progressbar.start()
-root_progressbar_label = Label(root, text="Ready for adventure...")
+root_progressbar_label = TTKLabel(root, text="Ready for adventure...")
 root_progressbar_label.grid(row=3)
 
 status_bar = ResToolStatusBar(root)  # create a status bar class object
@@ -1305,6 +1347,11 @@ def listen():
 
 
 reactor.callWhenRunning(listen)'''  # This is code for the remote functionality, which I will leave for future use
+
+# Make sure heartbeats are posted regularly
+heartbeatTask = task.LoopingCall(post_heartbeat)
+heartbeatTask.start(59.9)
+
 # noinspection PyUnresolvedReferences
 reactor.run()
 # -------------------------------------------------- End Main Program --------------------------------------------------
