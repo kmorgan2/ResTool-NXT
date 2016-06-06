@@ -40,7 +40,7 @@ import io
 # THE ALMIGHTY DEBUG FLAG. SET THIS TO TRUE WITH GREAT CAUTION
 DEBUG = True
 # THE LESS ALMIGHTY NO_POST FLAG. SET THIS TO TRUE UNTIL WE GET OUR API ENDPOINTS AND DEV ACCESS
-NO_POST = True
+NO_POST = False
 
 # Logging
 # noinspection PyTypeChecker
@@ -58,7 +58,7 @@ API_TOKENS = API_BASE + "/tokens"
 EXPIRE_SECONDS = 60
 
 heartbeat = "Idle"
-
+api_count = 0
 # Check for Admin
 if not ctypes.windll.shell32.IsUserAnAdmin():
     ctypes.windll.user32.MessageBoxW(0, u"Please make sure to run ResTool with Administrator rights.",
@@ -85,12 +85,26 @@ s.configure('Red.TLabel', foreground='white', background='red')
 
 
 # And style modifiers
+# ----------------------------------------------------------
+# Function: red_status_area
+# Purpose:  change the coloration of status area to red
+# Preconds: GUI Initialized
+# Postconds:GUI status area is red themed
+# Arguments:
+# ----------------------------------------------------------
 def red_status_area():
     root_empty_space.configure(style="Red.TFrame")
     root_progressbar_label.configure(style="Red.TLabel")
     root.config(background='red')
 
 
+# ----------------------------------------------------------
+# Function: default_status_area
+# Purpose:  change the coloration of the status area to def
+# Preconds: GUI Initialized
+# Postconds:GUI status area is default TTK style
+# Arguments:
+# ----------------------------------------------------------
 def default_status_area():
     root_empty_space.configure(style="TFrame")
     root_progressbar_label.configure(style="TLabel")
@@ -99,8 +113,18 @@ def default_status_area():
 
 # ---------------------------------------------------- GUI Classes -----------------------------------------------------
 
+
 # A class encapsulation of the token dialog
 class TokenDialog:
+    # ----------------------------------------------------------
+    # Function: TokenDialog::__init__
+    # Purpose:  Initialize TokenDialog
+    # Preconds: None
+    # Postconds:Token Dialog is shown on screen or error thrown
+    # Arguments:
+    #           parent: the toplevel window we inherit from
+    #           token_mgr: a Token class object for verification
+    # ----------------------------------------------------------
     def __init__(self, parent, token_mgr):
         self.token_manager = token_mgr
         self.token = None
@@ -118,6 +142,14 @@ class TokenDialog:
         b = TTKButton(top, text="OK", command=self.ok)
         b.grid(pady=5, columnspan=2)
 
+    # ----------------------------------------------------------
+    # Function: TokenDialog::ok
+    # Purpose:  callback/command for the OK button. Verifies tok
+    # Preconds: TokenDialog is initialized
+    # Postconds:A valid token has been entered and the window
+    #           dismissed, OR input field cleared, error colored
+    # Arguments:
+    # ----------------------------------------------------------
     def ok(self):
         if self.num.get():
             self.token = self.num.get()
@@ -127,12 +159,28 @@ class TokenDialog:
                 self.num.delete(0, END)
                 self.label.configure(style="Error.TLabel")
 
+    # ----------------------------------------------------------
+    # Function: TokenDialog::get_token
+    # Purpose:  return the token after the window is dismissed
+    # Preconds: None
+    # Postconds:None
+    # Arguments:
+    # ----------------------------------------------------------
     def get_token(self):
         return self.token
 
 
 # A class encapsulation of the status bar
 class ResToolStatusBar(Frame):
+    # ----------------------------------------------------------
+    # Function: ResToolStatusBar::__init__
+    # Purpose:  initialize the status bar object
+    # Preconds: have a token or are set offline
+    # Postconds:status bar ready to be screened on GUI
+    # Arguments:
+    #           master: the Frame we inherit from
+    #           **kw: kwargs as necessary, passed to sc init
+    # ----------------------------------------------------------
     def __init__(self, master, **kw):
         Frame.__init__(self, master, **kw)
         # Display Windows version in leftmost box
@@ -149,8 +197,16 @@ class ResToolStatusBar(Frame):
         self.token_text = StringVar(value="No Ticket")
         self.token_label = Label(self, textvariable=self.token_text, anchor=W, borderwidth=1, relief=SUNKEN)
         self.token_label.pack(side=LEFT, fill=X, expand=True)
+        self.token_label.bind("<Button-1>", lambda _: token_manager.record_token())
         self.set_ticket()
 
+    # ----------------------------------------------------------
+    # Function: ResToolStatusBar::set_version
+    # Purpose:  place the windows version in the status bar
+    # Preconds: version_text exists
+    # Postconds:version_text displays windows version & bitness
+    # Arguments:
+    # ----------------------------------------------------------
     def set_version(self):
         try:
             _ = os.environ["PROGRAMFILES(X86)"]  # if there is a program files x86 dir
@@ -160,6 +216,13 @@ class ResToolStatusBar(Frame):
         value = 'Windows ' + str(platform.platform()).split('-')[1] + bits
         self.version_text.set(value)
 
+    # ----------------------------------------------------------
+    # Function: set_ip
+    # Purpose:  place the IP address in the status bar
+    # Preconds: ip_text exists
+    # Postconds:ip_text displays the most useful IP
+    # Arguments:
+    # ----------------------------------------------------------
     def set_ip(self):
         # gets the valid hostname of this machine (borrowed this code from stack overflow)
         ip_address = [l for l in (
@@ -168,11 +231,25 @@ class ResToolStatusBar(Frame):
                  [socket.socket(socket.AF_INET, socket.SOCK_DGRAM)]][0][1]]) if l][0][0]
         self.ip_text.set(ip_address)
 
+    # ----------------------------------------------------------
+    # Function: set_ticket
+    # Purpose:  place the ticket number in the status bar
+    # Preconds: we have a token, token_text exists
+    # Postconds:token_text displays ticket number or Offline
+    # Arguments:
+    # ----------------------------------------------------------
     def set_ticket(self):
         self.token_text.set(get_ticket())
 
 
 # ---------------------------------------------------- Token Class -----------------------------------------------------
+# ----------------------------------------------------------
+# Function: open_registry
+# Purpose:  initialize registry for use by other functions
+# Preconds: Windows Registry is in a readable state
+# Postconds:A valid handle to HKLM\Software\ResTech exists
+# Arguments: 
+# ----------------------------------------------------------
 def open_registry(w=False):
     try:
         r = reg.OpenKey(reg.HKEY_LOCAL_MACHINE, "Software\\ResTech\\", 0, reg.KEY_ALL_ACCESS if w else reg.KEY_READ)
@@ -185,17 +262,32 @@ def open_registry(w=False):
 
 # A class to manage the token, saving and reading from the registry, and handling no-token occurrences
 class Token:
+    # ----------------------------------------------------------
+    # Function: Token::__init__
+    # Purpose:  initialize token management class
+    # Preconds: None
+    # Postconds:Token object initialized with token or offline
+    # Arguments:
+    #           token: a token to use before searching for one
+    # ----------------------------------------------------------
     def __init__(self, token=None):
         self.token = token
         if not self.token:  # try to get it from the registry
-            self.get_token()
+            self.get_token(validate=True)
             if self.token:
-                log.info("Retrieved stored token from registry.")
+                log.debug("Retrieved stored token from registry.")
         if NO_POST and not self.token:  # it's not in the registry, but we are offline
             self.set_token("Offline")
         elif not self.token:  # try to get it from the user
             self.record_token()
 
+    # ----------------------------------------------------------
+    # Function: Token::record_token
+    # Purpose:  record a token from the user using TokenDialog
+    # Preconds: Token pre-initialized
+    # Postconds:Token recorded or set offline
+    # Arguments:
+    # ----------------------------------------------------------
     def record_token(self):
         global NO_POST
         td = TokenDialog(root, self)
@@ -204,28 +296,58 @@ class Token:
         if not self.validate_token():
             self.set_token("Offline")
             NO_POST = True
-            log.error("No valid token supplied; user exited prompt. Operating offline.")
+            log.warn("No valid token supplied; user exited prompt. Operating offline.")
         else:
-            log.info("Token {token} recorded from user", token=self.token)
+            log.debug("Token {token} recorded from user", token=self.token)
 
+    # ----------------------------------------------------------
+    # Function: Token::validate_token
+    # Purpose:  validate the token with Intranet
+    # Preconds: Token number initialized (or is supplied)
+    # Postconds:None
+    # Arguments:
+    #           token: override stored token to verify
+    # ----------------------------------------------------------
     def validate_token(self, token=None):
         if not token:
             token = self.token
-        if token and (token == "Offline" or NO_POST):
+        if not token or token == "Offline" or NO_POST:
             return True
+
+        global api_count
+        api_count += 1
+        log.debug("API called to validate Token. This is call {ac} since launch.", ac=api_count)
+
         return requests.get(API_TOKENS + "/" + token).status_code == 200
 
-    def get_token(self):
+    # ----------------------------------------------------------
+    # Function: Token::get_token
+    # Purpose:  returns the token or retrieves it from the regi-
+    #           stry. If validate is true, it checks validity
+    # Preconds: Token exists or in registry
+    # Postconds:Token may be validated
+    # Arguments:
+    #           validate: whether the token should be checked
+    # ----------------------------------------------------------
+    def get_token(self, validate=False):
         if not self.token:
             try:
                 self.token = str(reg.QueryValueEx(open_registry(), "token")[0])
             except (WindowsError, KeyError):  # The Token Value in the ResTech does not exist. Return placeholder text.
                 self.token = None
-                log.error("Attempt to get token when none was initialized or stored.")
-        if not self.validate_token():
+                log.debug("Attempt to get token when none was initialized or stored.")
+        if validate and not (self.token and self.validate_token()):
             self.record_token()
         return self.token
 
+    # ----------------------------------------------------------
+    # Function: Token::set_token
+    # Purpose:  sets the token in the registry
+    # Preconds: None
+    # Postconds:Token stored in registry
+    # Arguments:
+    #           value: the token to set in-object and -registry
+    # ----------------------------------------------------------
     def set_token(self, value):
         self.token = value
         try:
@@ -234,17 +356,26 @@ class Token:
         except (WindowsError, KeyError):  # This should be impossible. If it happens, something has gone wrong
             ctypes.windll.user32.MessageBoxW(0, u'Unrecoverable error in writing token to registry.', u'Registry Error',
                                              16)
-            log.failure("Registry not in valid state when storing token.")
+            log.critical("Registry not in valid state when storing token.")
+            sys.exit()
 
+    # ----------------------------------------------------------
+    # Function: Token::delete_token
+    # Purpose:  deletes the token from the registry
+    # Preconds: Token in registry
+    # Postconds:Token not in registry
+    # Arguments:
+    # ----------------------------------------------------------
     def delete_token(self):
         self.token = None
         try:
             reg.DeleteKey(reg.HKEY_LOCAL_MACHINE, "Software\\ResTech\\")
-            log.info("Removed recorded token.")
+            log.error("Removed recorded token.")
         except (WindowsError, KeyError):  # This should be impossible. If it happens, something has gone wrong
             ctypes.windll.user32.MessageBoxW(0, u'Unrecoverable error in removing ResTech registry data.',
                                              u'Registry Error', 16)
-            log.failure("Registry not in valid state when removing token.")
+            log.critical("Registry not in valid state when removing token.")
+            sys.exit()
 
 
 token_manager = Token()
@@ -252,11 +383,25 @@ token_manager = Token()
 
 # -------------------------------------------------- Safe Mode Class ---------------------------------------------------
 class SafeModeTracker:
+    # ----------------------------------------------------------
+    # Function: SafeModeTracker::__init__
+    # Purpose:  initialize the safe mode tracker
+    # Preconds: None
+    # Postconds:Safe mode option identified
+    # Arguments:
+    # ----------------------------------------------------------
     def __init__(self):
         self.safe_mode_set = False
         self.get_safe_mode_setting()
-        log.info("On launch, safe mode was {value}.", value="enabled" if self.safe_mode_set else "disabled")
+        log.debug("On launch, safe mode was {value}.", value="enabled" if self.safe_mode_set else "disabled")
 
+    # ----------------------------------------------------------
+    # Function: SafeModeTracker::get_safe_mode_setting
+    # Purpose:  check whether the system will boot to safe mode
+    # Preconds: None
+    # Postconds:Safe Mode button correctly reflects state
+    # Arguments:
+    # ----------------------------------------------------------
     def get_safe_mode_setting(self):
         output = subprocess.check_output(["bcdedit", "/enum", "{default}"], shell=True)
         if "safeboot" in output:
@@ -267,6 +412,13 @@ class SafeModeTracker:
             self.safe_mode_set = False
             msc_button.configure(text="Enable")
 
+    # ----------------------------------------------------------
+    # Function: safeModeTracker::enable_safe_mode
+    # Purpose:  Enable safe mode on next boot
+    # Preconds: Safe mode disabled for next boot
+    # Postconds:Safe mode enabled for next boot
+    # Arguments:
+    # ----------------------------------------------------------
     def enable_safe_mode(self):
         # Modify the BCD Configuration to enable safe boot with networking
         subprocess.Popen(["bcdedit", "/set", "{default}", "safeboot", "network"], shell=True).wait()
@@ -276,6 +428,13 @@ class SafeModeTracker:
         else:
             log.error("There was an error enabling safe mode.")
 
+    # ----------------------------------------------------------
+    # Function: SafeModeTracker::disable_safe_mode
+    # Purpose:  Disable safe mode on next boot
+    # Preconds: Safe mode enabled for next boot
+    # Postconds:Safe mode disabled for next boot
+    # Arguments:
+    # ----------------------------------------------------------
     def disable_safe_mode(self):
         # Modify the BCD Configuration to disable safeboot
         subprocess.Popen(["bcdedit", "/deletevalue", "{default}", "safeboot"], shell=True).wait()
@@ -285,6 +444,13 @@ class SafeModeTracker:
         else:
             log.error("There was an error disabling safe mode.")
 
+    # ----------------------------------------------------------
+    # Function: toggle_safe_mode
+    # Purpose:  Toggle safe mode option for next boot
+    # Preconds: None
+    # Postconds:Safe Mode setting for next boot inverted
+    # Arguments:
+    # ----------------------------------------------------------
     def toggle_safe_mode(self):
         if self.safe_mode_set:
             self.disable_safe_mode()
@@ -295,15 +461,35 @@ class SafeModeTracker:
 # --------------------------------------------------- API Functions ----------------------------------------------------
 
 
+# ----------------------------------------------------------
+# Function: update_heartbeat
+# Purpose:  Sets the current heartbeat and posts to Intranet
+# Preconds: heartbeat exists
+# Postconds:heartbeat updated and posted to Intranet
+# Arguments:
+#           text: the text of the heartbeat
+#           expire_seconds: how long the heartbeat is valid
+# ----------------------------------------------------------
 def update_heartbeat(text, expire_seconds=EXPIRE_SECONDS):
     global heartbeat
     heartbeat = text
     post_heartbeat(expire_seconds)
 
 
+# ----------------------------------------------------------
+# Function: post_heartbeat
+# Purpose:  Posts the current heartbeat to the Intranet
+# Preconds: heartbeat exists
+# Postconds:heartbeat has been posted to Intranet
+# Arguments:
+#           expire_seconds: how long the heartbeat is valid
+# ----------------------------------------------------------
 def post_heartbeat(expire_seconds=EXPIRE_SECONDS):
     global heartbeat, API_HEARTBEATS
     if not NO_POST and token_manager.get_token():
+        global api_count
+        api_count += 1
+        log.debug("API called to post Heartbeat. This is call {ac} since launch.", ac=api_count)
         response = requests.post(API_HEARTBEATS,
                                  {'token': token_manager.get_token(), 'status': heartbeat,
                                   'expire_seconds': expire_seconds})
@@ -312,33 +498,62 @@ def post_heartbeat(expire_seconds=EXPIRE_SECONDS):
         except AssertionError:  # Error posting the heartbeat
             if response.status_code == 401:  # Bad token
                 log.error('Invalid Token {token} when posting heartbeat.', token=token_manager.get_token())
+                if token_manager.get_token(validate=True) and token_manager.get_token() != "Offline":
+                    post_heartbeat(expire_seconds)
             elif response.status_code == 400:  # Bad status or expire_seconds
                 log.error('Invalid data when posting heartbeat "{heartbeat}"', heartbea=heartbeat)
             else:  # Uncaught (500, 404, etc)
                 log.error('Uncaught HTTP Error {rc}. token in POST heartbeats: with token: {t}, heartbeat:"{h}",' +
-                          'and expire_seconds: {e}', t=token_manager.get_token(), h=heartbeat, e=expire_seconds)
+                          'and expire_seconds: {e}', t=token_manager.get_token(), h=heartbeat, e=expire_seconds,
+                          rc=response.status_code)
+                if token_manager.get_token(validate=True) and token_manager.get_token() != "Offline":
+                    post_heartbeat(expire_seconds)
         return response.status_code
     return "Offline"
 
 
+# ----------------------------------------------------------
+# Function: post_event
+# Purpose:  Post an event to the Intranet
+# Preconds: None
+# Postconds:Event has been posted to the Intranet
+# Arguments:
+#           text: the text of the event
+# ----------------------------------------------------------
 def post_event(text):
     if not NO_POST and token_manager.get_token():
+
+        global api_count
+        api_count += 1
+        log.debug("API called to post Event. This is call {ac} since launch.", ac=api_count)
+
         response = requests.post(API_EVENTS, {'token': token_manager.get_token(), 'text': text})
         try:
             assert response.status_code == 200
         except AssertionError:  # Error posting the event
             if response.status_code == 401:  # Bad token
                 log.error('Invalid Token {token} when posting event.', token=token_manager.get_token())
+                if token_manager.get_token(validate=True) and token_manager.get_token() != "Offline":
+                    post_event(text)
             elif response.status_code == 400:  # Bad text
                 log.error('Invalid data when posting event "{text}"', text=text)
             else:  # Uncaught (500, 404, etc)
                 log.error('Uncaught HTTP Error {rc} in POST events: with token:{token} and event: "{text}"',
                           token=token_manager.get_token(),
-                          text=text)
+                          text=text, rc=response.status_code)
+                if token_manager.get_token(validate=True) and token_manager.get_token() != "Offline":
+                    post_event(text)
         return response.status_code
     return "Offline"
 
 
+# ----------------------------------------------------------
+# Function: stop
+# Purpose:  halt the program and inform Intranet
+# Preconds: Program running
+# Postconds:Program not running
+# Arguments: 
+# ----------------------------------------------------------
 def stop():
     update_heartbeat("ResTool was closed at the request of the user.", 3600)
     log.info("ResTool was closed at the request of the user.")
@@ -346,26 +561,52 @@ def stop():
     return None
 
 
+# ----------------------------------------------------------
+# Function: invalidate_token
+# Purpose:  Invalidate the current token
+# Preconds: Valid token exists
+# Postconds:Current token invalidated and unbound
+# Arguments: 
+# ----------------------------------------------------------
 def invalidate_token():
     if not NO_POST:
+        global api_count
+        api_count += 1
+        log.debug("API called to invalidate Token. This is call {ac} since launch.", ac=api_count)
+
         response = requests.post(API_TOKENS + "/" + token_manager.get_token(), {'action': 'invalidate'})
         try:
             assert response.status_code == 200
         except AssertionError:  # Error posting the event
             if response.status_code == 401:  # Bad token
                 log.error('Invalid Token {token} when invalidating token.', token=token_manager.get_token())
+                if token_manager.get_token(validate=True) and token_manager.get_token() != "Offline":
+                    invalidate_token()
             elif response.status_code == 400:  # Bad action
                 log.error('Invalid action "invalidate" when invalidating token.')
             else:  # Uncaught (500, 404, etc)
                 log.error('Uncaught HTTP Error {rc} in POST token: {token} with action: invalidate',
-                          token=token_manager.get_token())
+                          token=token_manager.get_token(), rc=response.status_code)
+                if token_manager.get_token(validate=True) and token_manager.get_token() != "Offline":
+                    invalidate_token()
         return response.status_code
     token_manager.delete_token()
     return "Offline"
 
 
+# ----------------------------------------------------------
+# Function: get_ticket
+# Purpose:  Get the ticket for the current token
+# Preconds: Token exists and is valid
+# Postconds:None
+# Arguments: 
+# ----------------------------------------------------------
 def get_ticket():
     if not NO_POST:
+        global api_count
+        api_count += 1
+        log.debug("API called to get Ticket. This is call {ac} since launch.", ac=api_count)
+
         response = requests.get(API_TOKENS + "/" + token_manager.get_token())
         try:
             assert response.status_code == 200
@@ -374,8 +615,13 @@ def get_ticket():
         except AssertionError:
             if response.status_code == 404:
                 log.error("Invalid Token {token} when getting ticket.")
+                if token_manager.get_token(validate=True) and token_manager.get_token() != "Offline":
+                    get_ticket()
             else:
-                log.error("Uncaught HTTP Error {rc} in GET token: {token}")
+                log.error("Uncaught HTTP Error {rc} in GET token: {token}", token=token_manager.get_token(),
+                          rc=response.status_code)
+                if token_manager.get_token(validate=True) and token_manager.get_token() != "Offline":
+                    get_ticket()
             return "No Ticket"
     return "Offline"
 
@@ -384,6 +630,19 @@ def get_ticket():
 
 
 # Called to thread-defer a GUI callback.
+# ----------------------------------------------------------
+# Function: app_defer
+# Purpose:  Perform thread-safe execution of a function and:
+#               -log its start
+#               -update the GUI status area
+#               -update the heartbeat
+#               -bind callback and errback functions
+# Preconds: None
+# Postconds:The specified function deferred to open thread
+# Arguments:
+#           function: the function to defer
+#           name: the name of the function for logging
+# ----------------------------------------------------------
 def app_defer(function, name):
     log.info("Running {name}", name=name)
     default_status_area()
@@ -397,6 +656,14 @@ def app_defer(function, name):
 
 
 # Called on app success
+# ----------------------------------------------------------
+# Function: app_callback
+# Purpose:  Log successful completion of a deferred function
+# Preconds: Deferred function completes successfully
+# Postconds:Results logged and GUI updated to idle state
+# Arguments:
+#           return_text: data returned by deferred function
+# ----------------------------------------------------------
 def app_callback(return_text):
     if return_text is not None:
         log.info("Finished. " + return_text)
@@ -410,6 +677,15 @@ def app_callback(return_text):
 
 
 # Called on app error
+# ----------------------------------------------------------
+# Function: app_errback
+# Purpose:  Log error termination of a deferred function
+# Preconds: Deferred function throws an uncaught exception
+# Postconds:Error logged and GUI updated to error state
+# Arguments:
+#           error: the uncaught exception
+#           name: the name of the function for logging
+# ----------------------------------------------------------
 def app_errback(error, name):
     log.error("Error running {name}\n" + error.getErrorMessage(), name=name)
     # update status
@@ -422,14 +698,29 @@ def app_errback(error, name):
     root_progressbar.stop()
 
 
+# ----------------------------------------------------------
+# Function: run_cf
+# Purpose:  Run ComboFix scan. Win 8+ incompatible
+# Preconds: ComboFix is compatible, CF.exe exists
+# Postconds:ComboFix scan run and results gathered
+# Arguments:
+# ----------------------------------------------------------
 def run_cf():
     return None
 
 
+# Function to defer run_cf
 def run_cf_defer():
     app_defer(run_cf, "ComboFix")
 
 
+# ----------------------------------------------------------
+# Function: run_mwb
+# Purpose:  Run MalwareBytes Anti Malware Scan
+# Preconds: MWB.exe exists
+# Postconds:MWBAM scan run and results gathered
+# Arguments: 
+# ----------------------------------------------------------
 def run_mwb():
     application = Application()
     if os.path.isfile("C:\Program Files (x86)\Malwarebytes Anti-Malware\mbam.exe"):
@@ -477,7 +768,16 @@ def run_mwb():
         pass
     application.MalwarebytesAntiMalwareHome.ClickInput(coords=(493, 477))
 
-    # Gets and returns the pixel color at the specified coordinates
+    # ----------------------------------------------------------
+    # Function: run_mwb::get_color
+    # Purpose:  get the color of a pixel given XY coordinates
+    # Preconds:window exists
+    # Postconds:None
+    # Arguments:
+    #           window: a PyWinAuto window specification
+    #           xpos: the pixel x-coordinate (left to right)
+    #           ypos: the pixel y-coordinate (top to bottom)
+    # ----------------------------------------------------------
     def get_color(window, xpos, ypos):
         handle = window.handle
         dc = GetWindowDC(handle)
@@ -512,10 +812,18 @@ def run_mwb():
     return str(num_infect) + " detections."
 
 
+# Function to defer run_mwb
 def run_mwb_defer():
     app_defer(run_mwb, "Malwarebytes")
 
 
+# ----------------------------------------------------------
+# Function: run_eset
+# Purpose:  Run an ESET Online Scanner scan
+# Preconds: ESET.exe exists, an active network connection
+# Postconds:ESET scan run and results recorded
+# Arguments:
+# ----------------------------------------------------------
 def run_eset():
     app = Application()
     try:
@@ -567,10 +875,18 @@ def run_eset():
         return str(num_found) + " detections."
 
 
+# Function to defer run_eset
 def run_eset_defer():
     app_defer(run_eset, "ESET")
 
 
+# ----------------------------------------------------------
+# Function: run_sas
+# Purpose:  Runs a SUEPERAntiSpyware Scan
+# Preconds: SAS.exe exists
+# Postconds:SAS scan ran and results recorded
+# Arguments: 
+# ----------------------------------------------------------
 def run_sas():
     app = Application()
     try:
@@ -614,7 +930,16 @@ def run_sas():
     app.SUPERAntiSpywareFreeEdition[u'5'].ClickInput()
     app.SUPERAntiSpywareFreeEdition.ClickInput(coords=(500, 150))
 
-    # Gets and returns the pixel color at the specified coordinates
+    # ----------------------------------------------------------
+    # Function: run_sas::get_color
+    # Purpose:  get the color of a pixel given XY coordinates
+    # Preconds:window exists
+    # Postconds:None
+    # Arguments:
+    #           window: a PyWinAuto window specification
+    #           xpos: the pixel x-coordinate (left to right)
+    #           ypos: the pixel y-coordinate (top to bottom)
+    # ----------------------------------------------------------
     def get_color(window, x, y):
         handle = window.handle
         dc = GetWindowDC(handle)
@@ -629,18 +954,34 @@ def run_sas():
     return None
 
 
+# Function to defer run_sas
 def run_sas_defer():
     app_defer(run_sas, "SuperAntiSpyware")
 
 
+# ----------------------------------------------------------
+# Function: run_sb
+# Purpose:  Run a SpyBot Search and Destroy Scan
+# Preconds: SB.exe exists
+# Postconds:SB scan run and results recorded
+# Arguments: 
+# ----------------------------------------------------------
 def run_sb():
     return None
 
 
+# Function to defer run_sb
 def run_sb_defer():
     app_defer(run_sb, "Spybot")
 
 
+# ----------------------------------------------------------
+# Function: run_hc
+# Purpose:  Run a Trend Micro HouseCall Scan
+# Preconds: HC.exe exists
+# Postconds:HC scan run and results recorded
+# Arguments: 
+# ----------------------------------------------------------
 def run_hc():
     application = Application().start("programs/HC.exe")
     time.sleep(2.0)
@@ -660,10 +1001,18 @@ def run_hc():
     return None
 
 
+# Function to defer run_hc
 def run_hc_defer():
     app_defer(run_hc, "TrendMicro HouseCall")
 
 
+# ----------------------------------------------------------
+# Function: run_cc
+# Purpose:  Run a CCLeaner file and registry cleaning
+# Preconds: CC.exe exists
+# Postconds:CC file and at least 1 reg scan run and recorded
+# Arguments: 
+# ----------------------------------------------------------
 def run_cc():
     # if installed
     results = []
@@ -739,10 +1088,18 @@ def run_cc():
         return run_cc()
 
 
+# Function to defer run_cc
 def run_cc_defer():
     app_defer(run_cc, "CCleaner")
 
 
+# ----------------------------------------------------------
+# Function: rem_scans
+# Purpose:  Uninstall virus scanners, CCleaner, & All-in-one
+# Preconds: None
+# Postconds:MWB, ESET, SB, SAS, CC, AIO not installed
+# Arguments: 
+# ----------------------------------------------------------
 def rem_scans():
     uninstalled_programs = []
     application = Application()
@@ -777,7 +1134,7 @@ def rem_scans():
         os.rmdir("C:\\Program Files (x86)\\ESET\\ESET Online Scanner\\")
         uninstalled_programs.append("ESET")
     # remove SAS
-
+    # todo: implement SAS removal
     # remove SB
     if os.path.isfile("C:\Program Files (x86)\Spybot - Search & Destroy 2\unins000.exe"):
         try:
@@ -831,31 +1188,62 @@ def rem_scans():
     return "Removed the following programs: " + ", ".join(uninstalled_programs)
 
 
+# Function to defer rem_scans
 def rem_scans_defer():
     app_defer(rem_scans, "Scanner Uninstall")
 
 
+# ----------------------------------------------------------
+# Function: msc_toggle
+# Purpose:  Button callback to toggle safe mode
+# Preconds: None
+# Postconds:Safe mode toggled
+# Arguments: 
+# ----------------------------------------------------------
 def msc_toggle():
     safe_mode_tracker.toggle_safe_mode()
     return None
 
 
+# ----------------------------------------------------------
+# Function: run_mwbar
+# Purpose:  Run a Malwarebytes Anti Rootkit Scan
+# Preconds: MWBAR.exe exists
+# Postconds:MWBAR scan run and results recorded
+# Arguments: 
+# ----------------------------------------------------------
 def run_mwbar():
     return None
 
 
+# Function to defer run_mwbar
 def run_mwbar_defer():
     app_defer(run_mwbar, "Malwarebytes AntiRootkit")
 
 
+# ----------------------------------------------------------
+# Function: run_tdss
+# Purpose:  Run a Kaspersky TDSSKiller Scan
+# Preconds: TDSS.exe exists
+# Postconds:TDSSKiller scan run and results recorded
+# Arguments: 
+# ----------------------------------------------------------
 def run_tdss():
     return None
 
 
+# Function to defer run_tdss
 def run_tdss_defer():
     app_defer(run_tdss, "Kaspersky TDSSKiller")
 
 
+# ----------------------------------------------------------
+# Function: get_mse
+# Purpose:  Install Security Essentials/Windows Defender
+# Preconds: MSE.exe exists
+# Postconds:MSE installed or Windows Defender enabled
+# Arguments: 
+# ----------------------------------------------------------
 def get_mse():
     # if windows 7 - This is untested b/c I didn't have a win7 computer to test on.
     if platform.win32_ver()[0] == 7:
@@ -909,10 +1297,18 @@ def get_mse():
             raise UserWarning("Windows Defender Not Manually Enabled.")
 
 
+# Function to defer get_mse
 def get_mse_defer():
     app_defer(get_mse, "Windows Defender Install")
 
 
+# ----------------------------------------------------------
+# Function: run_pnf
+# Purpose:  Open Programs and Features
+# Preconds: None
+# Postconds:Programs and Features open
+# Arguments: 
+# ----------------------------------------------------------
 def run_pnf():
     try:
         subprocess.check_call(['control.exe', 'appwiz.cpl'])
@@ -920,6 +1316,13 @@ def run_pnf():
         log.error("Could not launch Programs and Features")
 
 
+# ----------------------------------------------------------
+# Function: run_temp
+# Purpose:  Run Temporary File Cleanup
+# Preconds: None
+# Postconds:Temporary File Cleanup launched
+# Arguments: 
+# ----------------------------------------------------------
 def run_temp():
     try:
         subprocess.check_call(['cleanmgr.exe'])
@@ -927,10 +1330,18 @@ def run_temp():
         log.error("Could not launch Temporary File Cleanup")
 
 
+# Function to defer run_temp
 def run_temp_defer():
     app_defer(run_temp, "Temporary File Cleanup")
 
 
+# ----------------------------------------------------------
+# Function: run_ticket
+# Purpose:  Open the ticket in the system webbrowser
+# Preconds: System has a web browser, Token is valid
+# Postconds:Ticket (login page) is open in browser
+# Arguments: 
+# ----------------------------------------------------------
 def run_ticket():
     ticket = get_ticket()
     if ticket not in ["Offline", "No Ticket"]:
@@ -940,8 +1351,15 @@ def run_ticket():
     return None
 
 
+# ----------------------------------------------------------
+# Function: run_ipconfig
+# Purpose:  Run an IPConfig reset
+# Preconds: System has a network connection
+# Postconds:IPConfig Reset completed
+# Arguments: 
+# ----------------------------------------------------------
 def run_ipconfig():
-    update_heartbeat("IPConfig Reset will cause this machine to become temporarily unreachable")
+    update_heartbeat("IPConfig Reset will cause this machine to become temporarily unreachable", 3600)
     try:
         subprocess.check_call(['ipconfig.exe', '/release'])
         subprocess.check_call(['ipconfig.exe', '/flushdns'])
@@ -951,37 +1369,61 @@ def run_ipconfig():
         raise UserWarning("Uncaught IPConfig Behavior: \n" + ''.join(ch for ch in e.output if ch not in ['x00', 'x08']))
 
 
+# Function to defer run_ipconfig
 def run_ipconfig_defer():
     app_defer(run_ipconfig, "IPConfig Reset")
 
 
+# ----------------------------------------------------------
+# Function: run_winsock
+# Purpose:  Runs a Winsock Reset
+# Preconds: System has a network connection
+# Postconds:Winsock, firewall, IPV4 services/catalogs reset
+# Arguments: 
+# ----------------------------------------------------------
 def run_winsock():
-    update_heartbeat("Winsock Reset requires a restart; this machine may be unreachable until the restart is complete.")
+    update_heartbeat("Winsock Reset requires a restart; this machine may be unreachable until the restarted.", 3600)
     try:
         subprocess.check_call(['netsh.exe', 'int', 'ip', 'reset'])
         subprocess.check_call(['netsh.exe', 'winsock', 'reset'])
         subprocess.check_call(['netsh.exe', 'winsock', 'reset', 'catalog'])
         subprocess.check_call(['netsh.exe', 'advfirewall', 'reset'])
         print "Reboot Necessary."
-        # Set ResTool to run on restart
-        # Restart the computer
+        # todo:Set ResTool to run on restart
+        # todo:Restart the computer
         return "Winsock Reset complete. Reboot Necessary."
     except subprocess.CalledProcessError as e:
         raise UserWarning("Uncaught Winsock Behavior: \n" + ''.join(ch for ch in e.output if ch not in ['x00', 'x08']))
 
 
+# Function to defer run_winsock
 def run_winsock_defer():
     app_defer(run_winsock, "Winsock Reset")
 
 
+# ----------------------------------------------------------
+# Function: run_hidapters
+# Purpose:  Removes hidden adapters known to cause net probs
+# Preconds: devcon.exe exists
+# Postconds:hidden adapters removed from device manager
+# Arguments: 
+# ----------------------------------------------------------
 def run_hidapters():
     return None
 
 
+# Function to defer run_hidapters
 def run_hidapters_defer():
     app_defer(run_hidapters, "Hidden Adapter Removal")
 
 
+# ----------------------------------------------------------
+# Function: run_wifi
+# Purpose:  Install the NIUWireless profile
+# Preconds: Wi-Fi.xml exists, Computer has Wi-Fi, using WZC
+# Postconds:Wi-Fi Profile installed without credentials
+# Arguments: 
+# ----------------------------------------------------------
 def run_wifi():
     try:
         return subprocess.check_output(["netsh", "wlan", "add", "profile", 'filename="programs\Wi-Fi.xml"'])
@@ -989,15 +1431,30 @@ def run_wifi():
         raise UserWarning("Uncaught WiFi Add Behavior: \n" + ''.join(ch for ch in e.output if ch not in ['x00', 'x08']))
 
 
+# Function to defer run_wifi
 def run_wifi_defer():
     app_defer(run_wifi, "WiFi Profile Install")
 
 
+# ----------------------------------------------------------
+# Function: run_speed
+# Purpose:  Run a speedtest in the system browser
+# Preconds: Computer has network connection, browser
+# Postconds:Speedtest website open in browser
+# Arguments: 
+# ----------------------------------------------------------
 def run_speed():
     webbrowser.open("http://speedtest.niu.edu")
     return None
 
 
+# ----------------------------------------------------------
+# Function: run_netcpl
+# Purpose:  Open Network and Sharing Center
+# Preconds: None
+# Postconds:Network and Sharing Center open
+# Arguments: 
+# ----------------------------------------------------------
 def run_netcpl():
     try:
         subprocess.check_call(['control.exe', '/name', 'Microsoft.NetworkAndSharingCenter'])
@@ -1005,6 +1462,13 @@ def run_netcpl():
         log.error("Could not launch Network and Sharing Center")
 
 
+# ----------------------------------------------------------
+# Function: run_sfc
+# Purpose:  Run a System File Checker Scan
+# Preconds: None
+# Postconds:SFC scan completed and results recorded
+# Arguments: 
+# ----------------------------------------------------------
 def run_sfc():
     try:
         output = subprocess.check_output("sfc /scannow")
@@ -1023,10 +1487,18 @@ def run_sfc():
         raise UserWarning("Uncaught SFC Behavior: \n" + ''.join(ch for ch in e.output if ch not in ['x00', 'x08']))
 
 
+# Function to defer run_sfc
 def run_sfc_defer():
     app_defer(run_sfc, "System File Checker")
 
 
+# ----------------------------------------------------------
+# Function: run_dism
+# Purpose:  Run a DISM health check and repair
+# Preconds: System compatible with DISM Check-Image commands
+# Postconds:DISM scan run and results recorded
+# Arguments: 
+# ----------------------------------------------------------
 def run_dism():
     try:
         output = subprocess.check_output("dism /Online /Cleanup-Image /RestoreHealth")
@@ -1039,18 +1511,34 @@ def run_dism():
         raise UserWarning("Uncaught DISM Behavior: \n" + ''.join(ch for ch in e.output if ch not in ['x00', 'x08']))
 
 
+# Function to defer run_dism
 def run_dism_defer():
     app_defer(run_dism, "DISM")
 
 
+# ----------------------------------------------------------
+# Function: run_aio
+# Purpose:  Run an All-in-One repair
+# Preconds: AIO.exe exists
+# Postconds:AIO scan run and results log
+# Arguments: 
+# ----------------------------------------------------------
 def run_aio():
     return None
 
 
+# Function to defer run_aio
 def run_aio_defer():
     app_defer(run_aio, "All-In-One Repair")
 
 
+# ----------------------------------------------------------
+# Function: run_defrag
+# Purpose:  Optimize or defragment all volumes
+# Preconds: 
+# Postconds:Drives optimized
+# Arguments: 
+# ----------------------------------------------------------
 def run_defrag():
     try:
         output = subprocess.check_output("defrag C: /H /O /U /V")
@@ -1066,10 +1554,18 @@ def run_defrag():
             "Uncaught Disk Optimization Behavior: \n" + ''.join(ch for ch in e.output if ch not in ['x00', 'x08']))
 
 
+# Function to defer run_defrag
 def run_defrag_defer():
     app_defer(run_defrag, "Disk Optimizer")
 
 
+# ----------------------------------------------------------
+# Function: run_chkdsk
+# Purpose:  Run Chkdsk verification on the system volume
+# Preconds: None
+# Postconds:Chkdsk run and recorded, repair queued if needed
+# Arguments: 
+# ----------------------------------------------------------
 def run_chkdsk():
     try:
         output = subprocess.check_output("chkdsk")
@@ -1083,10 +1579,18 @@ def run_chkdsk():
         raise UserWarning("Uncaught CHKDSK Behavior: \n" + ''.join(ch for ch in e.output if ch not in ['x00', 'x08']))
 
 
+# Function to defer run_chkdsk
 def run_chkdsk_defer():
     app_defer(run_chkdsk, "Disk Check")
 
 
+# ----------------------------------------------------------
+# Function: run_dmc
+# Purpose:  Run the Device Management Console
+# Preconds: None
+# Postconds:Device Manager is open
+# Arguments: 
+# ----------------------------------------------------------
 def run_dmc():
     try:
         subprocess.check_call(['mmc.exe', 'devmgmt.msc'])
@@ -1094,14 +1598,29 @@ def run_dmc():
         log.error("Could not launch Device Manager")
 
 
+# ----------------------------------------------------------
+# Function: rem_mse
+# Purpose:  Uninstall/Disable MSE or Windows Defender
+# Preconds: MSE/WD installed
+# Postconds:MSE/WD uninstalled or disabled
+# Arguments: 
+# ----------------------------------------------------------
 def rem_mse():
     return None
 
 
+# Function to defer rem_mse
 def rem_mse_defer():
     app_defer(rem_mse, "Windows Defender Uninstall")
 
 
+# ----------------------------------------------------------
+# Function: run_cpl
+# Purpose:  Open the Control Panel
+# Preconds: None
+# Postconds:Control Panel open
+# Arguments: 
+# ----------------------------------------------------------
 def run_cpl():
     try:
         subprocess.check_call(['control.exe'])
@@ -1109,6 +1628,13 @@ def run_cpl():
         log.error("Could not launch Control Panel")
 
 
+# ----------------------------------------------------------
+# Function: run_reg
+# Purpose:  Open Regedit
+# Preconds: None
+# Postconds:Regedit open
+# Arguments: 
+# ----------------------------------------------------------
 def run_reg():
     try:
         subprocess.check_call(['regedit.exe'])
@@ -1117,6 +1643,13 @@ def run_reg():
     return None
 
 
+# ----------------------------------------------------------
+# Function: run_awp
+# Purpose:  Install anywhere printer driver
+# Preconds: AWP.exe exists
+# Postconds:Anywhere Printer driver installed
+# Arguments: 
+# ----------------------------------------------------------
 def run_awp():
     application = Application()
     try:
@@ -1139,6 +1672,7 @@ def run_awp():
             application.PackageWindowsAnywherePrintClient.Edit.TextBlock())
 
 
+# Function to defer run_awp
 def run_awp_defer():
     app_defer(run_awp, "Anywhere Printer Install")
 
@@ -1167,6 +1701,13 @@ class ResToolWebResponder(Protocol):
                'Y': "All-In-One Repair", 'Z': "Disk Defragmenter", 'a': "Disk Check", 'c': "Windows Defender Uninstall",
                'f': "AnywherePrint Client Install"}
 
+    # ----------------------------------------------------------
+    # Function: dataReceived
+    # Purpose:  handle remote control command
+    # Preconds: Data exists in TCP stack
+    # Postconds:The requested program has been called
+    # Arguments:
+    # ----------------------------------------------------------
     def dataReceived(self, data):
         self.transport.write("0")
         if data[0] not in ["A", "J", "K", "O", "Q", "W", "b", "d", "e", "g", "h"]:  # These fxns are not action-worthy
@@ -1177,6 +1718,14 @@ class ResToolWebResponder(Protocol):
 
 # noinspection PyClassHasNoInit
 class ResToolWebResponderFactory(Factory):
+    # ----------------------------------------------------------
+    # Function: buildProtocol
+    # Purpose:  Construct a responder for TCP remote control cmd
+    # Preconds: 
+    # Postconds:a responder exists on addr
+    # Arguments:
+    #           addr: the address to respond on
+    # ----------------------------------------------------------
     def buildProtocol(self, addr):
         return ResToolWebResponder()
 
@@ -1330,9 +1879,23 @@ root.protocol('WM_DELETE_WINDOW', stop)  # bind the close
 '''endpoint = TCP4ServerEndpoint(reactor, 8000)
 
 
-def listen():
+    # ----------------------------------------------------------
+    # Function: listen
+    # Purpose:  listen for remote control data
+    # Preconds: port for listening is open
+    # Postconds:listening on port
+    # Arguments:
+    # ----------------------------------------------------------
+    def listen():
     d = endpoint.listen(ResToolWebResponderFactory())
 
+    # ----------------------------------------------------------
+    # Function: listen_failed
+    # Purpose:  Catch error listening to specified port
+    # Preconds: Error listening on endpoint
+    # Postconds:Error message displayed, program closed
+    # Arguments:
+    # ----------------------------------------------------------
     def listen_failed(_):
         ctypes.windll.user32.MessageBoxW(0,
                                          u"Unable to bind ResTool to the necessary network port.\n" +
