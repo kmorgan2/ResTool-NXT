@@ -26,10 +26,12 @@ import socket
 import ctypes
 import platform
 import time
+import logging
 
 # Process/Window Control Imports
 from pywinauto.application import Application
 from win32gui import GetPixel, GetWindowDC, ReleaseDC
+from win32com.client import Dispatch
 import win32clipboard
 import subprocess
 
@@ -45,20 +47,26 @@ NO_POST = False
 # Logging
 # noinspection PyTypeChecker
 log = Logger(observer=textFileLogObserver(io.open(os.path.expanduser("~\Desktop\log.txt"), 'a')))
+logging.getLogger("requests").setLevel(logging.WARNING)
 log.info("Starting ResTool")
-# Globals
-API_HOST = 'intranet'
+
+# Globals - API
+API_HOST = 'intranet'  # Which subdomain to use (before restech.niu.edu)
 if DEBUG:
-    API_HOST = 'dev'
-API_BASE = "http://" + API_HOST + ".restech.niu.edu/tickets/api/restool"
-API_HEARTBEATS = API_BASE + "/heartbeats"
-API_EVENTS = API_BASE + "/events"
-API_TOKENS = API_BASE + "/tokens"
+    API_HOST = 'dev'  # Subdomain is dev if we're in development
 
-EXPIRE_SECONDS = 60
+API_BASE = "http://" + API_HOST + ".restech.niu.edu/tickets/api/restool"  # URL of the API directory
 
-heartbeat = "Idle"
-api_count = 0
+API_HEARTBEATS = API_BASE + "/heartbeats"  # API endpoint for heartbeats
+API_EVENTS = API_BASE + "/events"  # API endpoint for events
+API_TOKENS = API_BASE + "/tokens"  # API endpoint for tokens
+
+EXPIRE_SECONDS = 60  # How long a default heartbeat should last
+
+heartbeat = "Idle"  # The global for storing/modifying the heartbeat
+
+api_count = 0  # How many times we've requested any API endpoint
+
 # Check for Admin
 if not ctypes.windll.shell32.IsUserAnAdmin():
     ctypes.windll.user32.MessageBoxW(0, u"Please make sure to run ResTool with Administrator rights.",
@@ -71,7 +79,7 @@ if not ctypes.windll.shell32.IsUserAnAdmin():
 root = Tk()  # create root window
 tksupport.install(root)  # bind the GUI to a twisted reactor
 root.protocol('WM_DELETE_WINDOW', None)  # unbind the close
-root.iconbitmap('icon.ico')  # icon is icon
+root.iconbitmap('.\\icon.ico')  # icon is icon
 root.title("ResTool NXT 2.0: Beta?")  # title is title
 root.resizable(0, 0)  # prevent resize
 
@@ -378,7 +386,7 @@ class Token:
             sys.exit()
 
 
-token_manager = Token()
+token_manager = Token()  # Initialize the token in global scope
 
 
 # -------------------------------------------------- Safe Mode Class ---------------------------------------------------
@@ -456,6 +464,15 @@ class SafeModeTracker:
             self.disable_safe_mode()
         else:
             self.enable_safe_mode()
+        if ctypes.windll.user32.MessageBoxW(0,
+                                            u"Would you like to restart now into " + (u'safe' if self.safe_mode_set else
+                                            u"normal") + u" mode?", u"Restart to switch modes?", 36) == 6:
+            update_heartbeat("ResTool will restart the computer to switch to " + ('safe' if self.safe_mode_set else
+                             "normal") + " mode.", 3600)
+            create_startup_shortcut()
+            subprocess.check_call(['shutdown', '/t', '0', '/r', '/f'])
+        else:
+            log.info("A restart was not performed after toggling safe mode.")
 
 
 # --------------------------------------------------- API Functions ----------------------------------------------------
@@ -624,6 +641,41 @@ def get_ticket():
                     get_ticket()
             return "No Ticket"
     return "Offline"
+
+
+# ----------------------------------------------------------
+# Function: create_startup_shortcut
+# Purpose:  Create a startup shortcut
+# Preconds: None
+# Postconds:A startup shortcut exists
+# Arguments:
+# ----------------------------------------------------------
+def create_startup_shortcut():
+    path = os.path.join('C:\ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp', "ResTool.lnk")
+    workingdir = os.path.abspath('.')
+    target = workingdir + '\ResTool NXT.exe'
+
+    if DEBUG:
+        workingdir += '\\dist'
+        target = workingdir + '\\main.exe'
+
+    shell = Dispatch('WScript.Shell')
+    shortcut = shell.CreateShortCut(path)
+    shortcut.Targetpath = target
+    shortcut.WorkingDirectory = workingdir
+    shortcut.IconLocation = target
+    shortcut.save()
+
+
+def delete_startup_shortcut():
+    try:
+        os.remove('C:\ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp\ResTool.lnk')
+        log.debug("On launch, restart link detected and removed")
+    except OSError:
+        log.debug("On launch, restart link was not detected.")
+
+
+delete_startup_shortcut()  # Call this ASAP to make sure this is done
 
 
 # -------------------------------------------------- Callback Methods --------------------------------------------------
@@ -1359,12 +1411,13 @@ def run_ticket():
 # Arguments: 
 # ----------------------------------------------------------
 def run_ipconfig():
+    post_event("IPConfig Reset started. Completion of this event may not be logged.")
     update_heartbeat("IPConfig Reset will cause this machine to become temporarily unreachable", 3600)
     try:
         subprocess.check_call(['ipconfig.exe', '/release'])
         subprocess.check_call(['ipconfig.exe', '/flushdns'])
         subprocess.check_call(['ipconfig.exe', '/renew'])
-        return "IPConfig Complete."
+        return "IPConfig Reset Complete."
     except subprocess.CalledProcessError as e:
         raise UserWarning("Uncaught IPConfig Behavior: \n" + ''.join(ch for ch in e.output if ch not in ['x00', 'x08']))
 
@@ -1382,16 +1435,22 @@ def run_ipconfig_defer():
 # Arguments: 
 # ----------------------------------------------------------
 def run_winsock():
+    post_event("Winsock Reset started. Completion of this event may not be logged.")
     update_heartbeat("Winsock Reset requires a restart; this machine may be unreachable until the restarted.", 3600)
     try:
-        subprocess.check_call(['netsh.exe', 'int', 'ip', 'reset'])
-        subprocess.check_call(['netsh.exe', 'winsock', 'reset'])
-        subprocess.check_call(['netsh.exe', 'winsock', 'reset', 'catalog'])
-        subprocess.check_call(['netsh.exe', 'advfirewall', 'reset'])
-        print "Reboot Necessary."
-        # todo:Set ResTool to run on restart
-        # todo:Restart the computer
+        subprocess.call(['netsh.exe', 'int', 'ip', 'reset'])
+        subprocess.call(['netsh.exe', 'winsock', 'reset'])
+        subprocess.call(['netsh.exe', 'winsock', 'reset', 'catalog'])
+        subprocess.call(['netsh.exe', 'advfirewall', 'reset'])
+
+        if ctypes.windll.user32.MessageBoxW(0, u"Would you like to restart now in order to complete the Winsock Reset?",
+                                            u"Restart Required!", 52) == 6:
+            create_startup_shortcut()
+            subprocess.check_call(['shutdown', '/t', '0', '/r', '/f'])
+        else:
+            log.warn("Restart not completed after Winsock Reset. Network behavior may be erratic.")
         return "Winsock Reset complete. Reboot Necessary."
+
     except subprocess.CalledProcessError as e:
         raise UserWarning("Uncaught Winsock Behavior: \n" + ''.join(ch for ch in e.output if ch not in ['x00', 'x08']))
 
@@ -1409,7 +1468,8 @@ def run_winsock_defer():
 # Arguments: 
 # ----------------------------------------------------------
 def run_hidapters():
-    return None
+    post_event("Hidden Adapter Removal started. Completion of this event may not be logged.")
+    return "Hidden Adapter Removal complete."
 
 
 # Function to defer run_hidapters
