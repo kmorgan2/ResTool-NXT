@@ -39,6 +39,9 @@ import subprocess
 import _winreg as reg
 import io
 
+# Disable warnings to console
+sys.stderr = open(os.devnull, 'w')
+
 # THE ALMIGHTY DEBUG FLAG. SET THIS TO TRUE WITH GREAT CAUTION
 DEBUG = True
 # THE LESS ALMIGHTY NO_POST FLAG. SET THIS TO TRUE UNTIL WE GET OUR API ENDPOINTS AND DEV ACCESS
@@ -301,7 +304,7 @@ class Token:
         td = TokenDialog(root, self)
         root.wait_window(td.top)
         self.set_token(td.get_token())
-        if not self.validate_token():
+        if not self.validate_token() or not self.get_token():
             self.set_token("Offline")
             NO_POST = True
             log.warn("No valid token supplied; user exited prompt. Operating offline.")
@@ -466,9 +469,10 @@ class SafeModeTracker:
             self.enable_safe_mode()
         if ctypes.windll.user32.MessageBoxW(0,
                                             u"Would you like to restart now into " + (u'safe' if self.safe_mode_set else
-                                            u"normal") + u" mode?", u"Restart to switch modes?", 36) == 6:
+                                                                                      u"normal") + u" mode?",
+                                            u"Restart to switch modes?", 36) == 6:
             update_heartbeat("ResTool will restart the computer to switch to " + ('safe' if self.safe_mode_set else
-                             "normal") + " mode.", 3600)
+                                                                                  "normal") + " mode.", 3600)
             create_startup_shortcut()
             subprocess.check_call(['shutdown', '/t', '0', '/r', '/f'])
         else:
@@ -503,7 +507,7 @@ def update_heartbeat(text, expire_seconds=EXPIRE_SECONDS):
 # ----------------------------------------------------------
 def post_heartbeat(expire_seconds=EXPIRE_SECONDS):
     global heartbeat, API_HEARTBEATS
-    if not NO_POST and token_manager.get_token():
+    if not NO_POST and not token_manager.get_token() == "Offline":
         global api_count
         api_count += 1
         log.debug("API called to post Heartbeat. This is call {ac} since launch.", ac=api_count)
@@ -538,7 +542,7 @@ def post_heartbeat(expire_seconds=EXPIRE_SECONDS):
 #           text: the text of the event
 # ----------------------------------------------------------
 def post_event(text):
-    if not NO_POST and token_manager.get_token():
+    if not NO_POST and not token_manager.get_token() == "Offline":
 
         global api_count
         api_count += 1
@@ -619,7 +623,7 @@ def invalidate_token():
 # Arguments: 
 # ----------------------------------------------------------
 def get_ticket():
-    if not NO_POST:
+    if not NO_POST or not token_manager.get_token() == "Offline":
         global api_count
         api_count += 1
         log.debug("API called to get Ticket. This is call {ac} since launch.", ac=api_count)
@@ -740,7 +744,8 @@ def app_callback(return_text):
 # ----------------------------------------------------------
 def app_errback(error, name):
     log.error("Error running {name}\n" + error.getErrorMessage(), name=name)
-    log.failure("", error)
+    if DEBUG:
+        log.failure("", error)
     # update status
     post_event("While running " + str(name) + ", ResTool encountered an error:\n" + error.getErrorMessage())
     update_heartbeat("Error running " + str(name))
@@ -789,7 +794,7 @@ def run_mwb():
             pass
         time.sleep(0.25)
         try:
-            application.connect(title_re="Select Set*")
+            application.connect(title_re="Select Set.*")
         except UserWarning:  # bitness error
             pass
         application.SelectSetupLanguage.OK.ClickInput()
@@ -1001,7 +1006,7 @@ def run_sas():
         return (color & 0xff), ((color >> 8) & 0xff), ((color >> 16) & 0xff)
 
     # Wait for "Finish" button to appear
-    while get_color(app.MalwareBytesAntiMalwareHome, 350, 478) != (49, 58, 63):
+    while get_color(app.SUPERAntiSpywareFreeEdition, 350, 478) != (49, 58, 63):  # todo: Coords wrong
         time.sleep(5)
 
     return None
@@ -1020,6 +1025,20 @@ def run_sas_defer():
 # Arguments: 
 # ----------------------------------------------------------
 def run_sb():
+    application = Application().start("programs/SB.exe")
+    time.sleep(2.5)
+    application.connect(title_re=".*Select Setup Language.*")
+    application.SelectSetupLanguage.OK.ClickInput()
+    for _ in range(0, 3):
+        application.SetupSpybotSearchDestroy.Next.ClickInput()
+    application.SetupSpybotSearchDestroy.Iaccepttheagreement.ClickInput()
+    application.SetupSpybotSearchDestroy.Next.ClickInput()
+    application.SetupSpybotSearchDestroy.Install.ClickInput()
+    while not application.SetupSpybotSearchDestroy.Finish.Exists():
+        time.sleep(5)
+        if application.Setup.OK.Exists():
+            application.Setup.OK.ClickInput()
+    application.SetupSpybotSearchDestroy.Finish.ClickInput()
     return None
 
 
@@ -1473,9 +1492,9 @@ def run_hidapters():
     root_progressbar.config(mode='determinate', value=0)
     post_event("Hidden Adapter Removal started. Completion of this event may not be logged.")
     classes = ["TEREDO", "ISATAP", "TUNMP", "6TO4"]
-    progress_increment = 100.0/(11*len(classes))
+    progress_increment = 100.0 / (11 * len(classes))
     for adapter in classes:
-        for instance in range(0,10): # remove things the old way
+        for instance in range(0, 10):  # remove things the old way
             time.sleep(0.1)
             subprocess.check_call(r'programs\devcon.exe -r remove "@ROOT\*' + adapter + r'\000' + str(instance) + '"')
             root_progressbar.step(progress_increment)
@@ -1483,7 +1502,6 @@ def run_hidapters():
         subprocess.check_call('programs\devcon.exe -r remove *' + adapter + '*')
 
     root_progressbar.config(value=0)
-
 
     return "Hidden Adapter Removal complete."
 
@@ -1826,7 +1844,7 @@ eset_button = TTKButton(av_scanners_group, text="ESET", command=run_eset_defer)
 eset_button.pack(padx=5, pady=5, fill=X)
 sas_button = TTKButton(av_scanners_group, text="SAS", command=run_sas_defer)
 sas_button.pack(padx=5, pady=5, fill=X)
-sb_button = TTKButton(av_scanners_group, text="Spybot", command=run_sb_defer, state=DISABLED)
+sb_button = TTKButton(av_scanners_group, text="Spybot", command=run_sb_defer)
 sb_button.pack(padx=5, pady=5, fill=X)
 hc_button = TTKButton(av_scanners_group, text="HouseCall", command=run_hc_defer, state=DISABLED)
 hc_button.pack(padx=5, pady=5, fill=X)
