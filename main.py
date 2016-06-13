@@ -740,6 +740,7 @@ def app_callback(return_text):
 # ----------------------------------------------------------
 def app_errback(error, name):
     log.error("Error running {name}\n" + error.getErrorMessage(), name=name)
+    log.failure("", error)
     # update status
     post_event("While running " + str(name) + ", ResTool encountered an error:\n" + error.getErrorMessage())
     update_heartbeat("Error running " + str(name))
@@ -1468,7 +1469,22 @@ def run_winsock_defer():
 # Arguments: 
 # ----------------------------------------------------------
 def run_hidapters():
+    root_progressbar.stop()
+    root_progressbar.config(mode='determinate', value=0)
     post_event("Hidden Adapter Removal started. Completion of this event may not be logged.")
+    classes = ["TEREDO", "ISATAP", "TUNMP", "6TO4"]
+    progress_increment = 100.0/(11*len(classes))
+    for adapter in classes:
+        for instance in range(0,10): # remove things the old way
+            time.sleep(0.1)
+            subprocess.check_call(r'programs\devcon.exe -r remove "@ROOT\*' + adapter + r'\000' + str(instance) + '"')
+            root_progressbar.step(progress_increment)
+        # For Win10, everything is virtual and friendly and we can use wildcards
+        subprocess.check_call('programs\devcon.exe -r remove *' + adapter + '*')
+
+    root_progressbar.config(value=0)
+
+
     return "Hidden Adapter Removal complete."
 
 
@@ -1861,7 +1877,7 @@ ipc_button = TTKButton(network_group, text="IPConfig", command=run_ipconfig_defe
 ipc_button.pack(padx=5, pady=5, fill=X)
 wsr_button = TTKButton(network_group, text="Winsock", command=run_winsock_defer)
 wsr_button.pack(padx=5, pady=5, fill=X)
-had_button = TTKButton(network_group, text="Hid. Adapters", command=run_hidapters_defer, state=DISABLED)
+had_button = TTKButton(network_group, text="Hid. Adapters", command=run_hidapters_defer)
 had_button.pack(padx=5, pady=5, fill=X)
 wzc_button = TTKButton(network_group, text="NIUwireless", command=run_wifi_defer)
 wzc_button.pack(padx=5, pady=5, fill=X)
