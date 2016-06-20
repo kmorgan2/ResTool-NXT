@@ -153,6 +153,9 @@ class TokenDialog:
 
         b = TTKButton(top, text="OK", command=self.ok)
         b.grid(pady=5, columnspan=2)
+        self.num.bind('<Return>', lambda event: self.ok())
+        self.num.bind('<Escape>', lambda event: self.top.destroy())
+        self.num.focus_set()
 
     # ----------------------------------------------------------
     # Function: TokenDialog::ok
@@ -630,7 +633,6 @@ def invalidate_token():
 # Arguments: 
 # ----------------------------------------------------------
 def get_ticket():
-    print token_manager.get_token()
     if not NO_POST and not token_manager.get_token() == "Offline":
         global api_count
         api_count += 1
@@ -928,8 +930,6 @@ def run_eset():
     time.sleep(0.5)
 
     # Check if found = cleaned
-    print(num_cleaned)
-    print(num_found)
     if num_cleaned != num_found:
         raise ValueError(
             "Not all infected files were able to be cleaned!\n\tFound:" + num_found + "\n\tCleaned" + num_cleaned)
@@ -1907,20 +1907,20 @@ sfc_button.pack(padx=5, pady=5, fill=X)
 uns_button = TTKButton(system_cleanup_group, text="Rem. Scans", command=rem_scans_defer)
 uns_button.pack(padx=5, pady=5, fill=X)
 system_cleanup_group.grid(row=0, sticky=N)
-msconfig_group = TTKLabelFrame(virus_scans__center, text="Safe Mode")
-msc_button = TTKButton(msconfig_group, text="Enable", command=msc_toggle)
-msc_button.pack(padx=5, pady=5, fill=X)
-msconfig_group.grid(row=1, sticky=N)
-virus_scans__center.pack(side=LEFT, expand=True, anchor=N, pady=5, fill=X)
-# ------Right Third
-virus_scans__right = TTKFrame(tab__virus_scans, style='White.TFrame')
-rootkit_group = TTKLabelFrame(virus_scans__right, text="Rootkit")
+rootkit_group = TTKLabelFrame(virus_scans__center, text="Rootkit")
 mwbar_button = TTKButton(rootkit_group, text="MWBAR", command=run_mwbar_defer, state=DISABLED)
 mwbar_button.pack(padx=5, pady=5, fill=X)
 tdss_button = TTKButton(rootkit_group, text="TDSS", command=run_tdss_defer, state=DISABLED)
 tdss_button.pack(padx=5, pady=5, fill=X)
-rootkit_group.grid(row=0)
-misc_group = TTKLabelFrame(virus_scans__right, text="Misc.")
+rootkit_group.grid(row=1, sticky=N)
+virus_scans__center.pack(side=LEFT, expand=True, anchor=N, pady=5, fill=X)
+# ------Right Third
+virus_scans__right = TTKFrame(tab__virus_scans, style='White.TFrame')
+msconfig_group = TTKLabelFrame(virus_scans__right, text="Safe Mode")
+msc_button = TTKButton(msconfig_group, text="Enable", command=msc_toggle)
+msc_button.pack(padx=5, pady=5, fill=X)
+msconfig_group.grid(row=0, sticky=N)
+misc_group = TTKLabelFrame(virus_scans__right, text="Miscellaneous")
 mse_button = TTKButton(misc_group, text="Inst. MSE", command=get_mse_defer)
 mse_button.pack(padx=5, pady=5, fill=X)
 progs_button = TTKButton(misc_group, text="Prog&Feat", command=run_pnf)
@@ -1929,8 +1929,8 @@ tfr_button = TTKButton(misc_group, text="Temp Files", command=run_temp_defer)
 tfr_button.pack(padx=5, pady=5, fill=X)
 tic_button = TTKButton(misc_group, text="Ticket", command=run_ticket)
 tic_button.pack(padx=5, pady=5, fill=X)
-misc_group.grid(row=1)
-virus_scans__right.pack(side=LEFT, expand=True, pady=5, fill=X)
+misc_group.grid(row=1, sticky=N)
+virus_scans__right.pack(side=LEFT, expand=True, anchor=N, pady=5, fill=X)
 root_notebook.add(tab__virus_scans, text="Virus Scans")
 
 # ----Tab:OS Troubleshooting
@@ -1981,7 +1981,7 @@ reg_button.pack(padx=5, pady=5, fill=X)
 awp_button = TTKButton(miscellaneous_group, text="Pharos", command=run_awp_defer)
 awp_button.pack(padx=5, pady=5, fill=X)
 miscellaneous_group.pack()
-os_troubleshooting__right.pack(side=LEFT, expand=True, fill=X, pady=5)
+os_troubleshooting__right.pack(side=LEFT, expand=True, anchor=N, fill=X, pady=5)
 root_notebook.add(tab__os_troubleshooting, text="OS Troubleshooting")
 
 # ----Tab:Removal Tools
@@ -1995,11 +1995,13 @@ removal_tools__center.pack(side=LEFT, expand=True)
 # ------Right Third
 removal_tools__right = TTKFrame(tab__removal_tools, style='White.TFrame')
 removal_tools__right.pack(side=LEFT, expand=True)
-root_notebook.add(tab__removal_tools, text="Removal Tools")
+root_notebook.add(tab__removal_tools, text="Removal Tools", state=DISABLED)
 
 # ----Tab:Auto
 tab__auto = TTKFrame(style='White.TFrame')
 root_notebook.add(tab__auto, text="Auto")
+auto_button = TTKButton(tab__auto, text="AUTO")
+auto_button.pack(fill=BOTH, expand=True)
 root_notebook.grid(row=0)
 
 root_empty_space = TTKFrame()
