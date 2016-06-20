@@ -164,8 +164,8 @@ class TokenDialog:
     # ----------------------------------------------------------
     def ok(self):
         if self.num.get():
-            self.token = self.num.get()
-            if self.token_manager.validate_token(self.token):
+            if self.token_manager.validate_token(self.num.get()):
+                self.token = self.num.get()
                 self.top.destroy()
             else:
                 self.num.delete(0, END)
@@ -206,7 +206,7 @@ class ResToolStatusBar(Frame):
         self.ip_label = Label(self, textvariable=self.ip_text, borderwidth=1, relief=SUNKEN)
         self.ip_label.pack(side=LEFT, fill=X, expand=True)
         # Display token in rightmost box
-        self.token_text = StringVar(value="No Ticket")
+        self.token_text = StringVar(value="Offline")
         self.token_label = Label(self, textvariable=self.token_text, anchor=W, borderwidth=1, relief=SUNKEN)
         self.token_label.pack(side=LEFT, fill=X, expand=True)
         self.token_label.bind("<Button-1>", lambda _: token_manager.record_token())
@@ -302,10 +302,14 @@ class Token:
     # ----------------------------------------------------------
     def record_token(self):
         global NO_POST
+        NO_POST = False
         td = TokenDialog(root, self)
-        root.wait_window(td.top)
-        self.set_token(td.get_token())
-        if not self.validate_token() or not self.get_token():
+        while root.wait_window(td.top):
+            time.sleep(5)
+        token = td.get_token()
+        if token():
+            self.set_token(token)
+        if not self.validate_token(accept_offline=False) or not self.get_token():
             self.set_token("Offline")
             NO_POST = True
             log.warn("No valid token supplied; user exited prompt. Operating offline.")
@@ -320,11 +324,13 @@ class Token:
     # Arguments:
     #           token: override stored token to verify
     # ----------------------------------------------------------
-    def validate_token(self, token=None):
+    def validate_token(self, token=None, accept_offline=True):
         if not token:
             token = self.token
-        if not token or token == "Offline" or NO_POST:
+        if token == "Offline" and accept_offline or NO_POST:
             return True
+        if not token:
+            return False
 
         global api_count
         api_count += 1
@@ -341,14 +347,14 @@ class Token:
     # Arguments:
     #           validate: whether the token should be checked
     # ----------------------------------------------------------
-    def get_token(self, validate=False):
+    def get_token(self, validate=False, accept_offline=True):
         if not self.token:
             try:
                 self.token = str(reg.QueryValueEx(open_registry(), "token")[0])
             except (WindowsError, KeyError):  # The Token Value in the ResTech does not exist. Return placeholder text.
                 self.token = None
                 log.debug("Attempt to get token when none was initialized or stored.")
-        if validate and not (self.token and self.validate_token()):
+        if validate and not (self.token and self.validate_token(accept_offline=accept_offline)):
             self.record_token()
         return self.token
 
@@ -520,7 +526,7 @@ def post_heartbeat(expire_seconds=EXPIRE_SECONDS):
         except AssertionError:  # Error posting the heartbeat
             if response.status_code == 401:  # Bad token
                 log.error('Invalid Token {token} when posting heartbeat.', token=token_manager.get_token())
-                if token_manager.get_token(validate=True) and token_manager.get_token() != "Offline":
+                if token_manager.get_token(validate=True, accept_offline=False):
                     post_heartbeat(expire_seconds)
             elif response.status_code == 400:  # Bad status or expire_seconds
                 log.error('Invalid data when posting heartbeat "{heartbeat}"', heartbea=heartbeat)
@@ -528,7 +534,7 @@ def post_heartbeat(expire_seconds=EXPIRE_SECONDS):
                 log.error('Uncaught HTTP Error {rc}. token in POST heartbeats: with token: {t}, heartbeat:"{h}",' +
                           'and expire_seconds: {e}', t=token_manager.get_token(), h=heartbeat, e=expire_seconds,
                           rc=response.status_code)
-                if token_manager.get_token(validate=True) and token_manager.get_token() != "Offline":
+                if token_manager.get_token(validate=True, accept_offline=False):
                     post_heartbeat(expire_seconds)
         return response.status_code
     return "Offline"
@@ -555,7 +561,7 @@ def post_event(text):
         except AssertionError:  # Error posting the event
             if response.status_code == 401:  # Bad token
                 log.error('Invalid Token {token} when posting event.', token=token_manager.get_token())
-                if token_manager.get_token(validate=True) and token_manager.get_token() != "Offline":
+                if token_manager.get_token(validate=True, accept_offline=False):
                     post_event(text)
             elif response.status_code == 400:  # Bad text
                 log.error('Invalid data when posting event "{text}"', text=text)
@@ -563,7 +569,7 @@ def post_event(text):
                 log.error('Uncaught HTTP Error {rc} in POST events: with token:{token} and event: "{text}"',
                           token=token_manager.get_token(),
                           text=text, rc=response.status_code)
-                if token_manager.get_token(validate=True) and token_manager.get_token() != "Offline":
+                if token_manager.get_token(validate=True, accept_offline=False):
                     post_event(text)
         return response.status_code
     return "Offline"
@@ -602,14 +608,14 @@ def invalidate_token():
         except AssertionError:  # Error posting the event
             if response.status_code == 401:  # Bad token
                 log.error('Invalid Token {token} when invalidating token.', token=token_manager.get_token())
-                if token_manager.get_token(validate=True) and token_manager.get_token() != "Offline":
+                if token_manager.get_token(validate=True, accept_offline=False):
                     invalidate_token()
             elif response.status_code == 400:  # Bad action
                 log.error('Invalid action "invalidate" when invalidating token.')
             else:  # Uncaught (500, 404, etc)
                 log.error('Uncaught HTTP Error {rc} in POST token: {token} with action: invalidate',
                           token=token_manager.get_token(), rc=response.status_code)
-                if token_manager.get_token(validate=True) and token_manager.get_token() != "Offline":
+                if token_manager.get_token(validate=True, accept_offline=False):
                     invalidate_token()
         return response.status_code
     token_manager.delete_token()
@@ -624,7 +630,8 @@ def invalidate_token():
 # Arguments: 
 # ----------------------------------------------------------
 def get_ticket():
-    if not NO_POST or not token_manager.get_token() == "Offline":
+    print token_manager.get_token()
+    if not NO_POST and not token_manager.get_token() == "Offline":
         global api_count
         api_count += 1
         log.debug("API called to get Ticket. This is call {ac} since launch.", ac=api_count)
@@ -637,14 +644,14 @@ def get_ticket():
         except AssertionError:
             if response.status_code == 404:
                 log.error("Invalid Token {token} when getting ticket.")
-                if token_manager.get_token(validate=True) and token_manager.get_token() != "Offline":
+                if token_manager.get_token(validate=True, accept_offline=False):
                     get_ticket()
             else:
                 log.error("Uncaught HTTP Error {rc} in GET token: {token}", token=token_manager.get_token(),
                           rc=response.status_code)
-                if token_manager.get_token(validate=True) and token_manager.get_token() != "Offline":
+                if token_manager.get_token(validate=True, accept_offline=False):
                     get_ticket()
-            return "No Ticket"
+            return "ERROR"
     return "Offline"
 
 
@@ -1456,7 +1463,7 @@ def run_temp_defer():
 # ----------------------------------------------------------
 def run_ticket():
     ticket = get_ticket()
-    if ticket not in ["Offline", "No Ticket"]:
+    if ticket not in ["Offline", "ERROR"]:
         webbrowser.open("http://" + API_HOST + ".restech.niu.edu/tickets/" + ticket)
     else:
         webbrowser.open("http://" + API_HOST + ".restech.niu.edu/tickets")
