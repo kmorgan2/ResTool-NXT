@@ -30,6 +30,7 @@ import logging
 
 # Process/Window Control Imports
 from pywinauto.application import Application
+from pywinauto.controls.common_controls import ListViewWrapper
 from win32gui import GetPixel, GetWindowDC, ReleaseDC
 from win32com.client import Dispatch
 import win32clipboard
@@ -1025,21 +1026,59 @@ def run_sas_defer():
 # Arguments: 
 # ----------------------------------------------------------
 def run_sb():
-    application = Application().start("programs/SB.exe")
-    time.sleep(2.5)
-    application.connect(title_re=".*Select Setup Language.*")
-    application.SelectSetupLanguage.OK.ClickInput()
-    for _ in range(0, 3):
+    application = Application()
+    if not os.path.isfile("C:\Program Files (x86)\Spybot - Search & Destroy 2\SDScan.exe"):
+        application.start("programs/SB.exe")
+        time.sleep(2.5)
+        application.connect(title_re=".*Select Setup Language.*")
+        application.SelectSetupLanguage.OK.ClickInput()
+        for _ in range(0, 3):
+            application.SetupSpybotSearchDestroy.Next.ClickInput()
+        application.SetupSpybotSearchDestroy.Iaccepttheagreement.ClickInput()
         application.SetupSpybotSearchDestroy.Next.ClickInput()
-    application.SetupSpybotSearchDestroy.Iaccepttheagreement.ClickInput()
-    application.SetupSpybotSearchDestroy.Next.ClickInput()
-    application.SetupSpybotSearchDestroy.Install.ClickInput()
-    while not application.SetupSpybotSearchDestroy.Finish.Exists():
-        time.sleep(5)
-        if application.Setup.OK.Exists():
-            application.Setup.OK.ClickInput()
-    application.SetupSpybotSearchDestroy.Finish.ClickInput()
-    return None
+        application.SetupSpybotSearchDestroy.Install.ClickInput()
+        while not application.SetupSpybotSearchDestroy.Finish.Exists():
+            time.sleep(5)
+            if application.Setup.OK.Exists():
+                application.Setup.OK.ClickInput()
+        application.SetupSpybotSearchDestroy.Finish.ClickInput()
+
+    # Update
+    application.start("C:\Program Files (x86)\Spybot - Search & Destroy 2\SDUpdate.exe")
+    time.sleep(10)
+    application.UpdateSpybotSearchDestroy.Update.Wait("exists enabled visible ready", 120)
+    application.UpdateSpybotSearchDestroy.Update.ClickInput()
+    application.UpdateSpybotSearchDestroy.Update.Wait("exists enabled visible ready", 36000)
+    update_log = application.UpdateSpybotSearchDestroy['Edit'].WindowText()
+    update_count = update_log.split("[+] Installed ")[-1].split(' updates')[0]
+    try:
+        int(update_count)
+    except ValueError:
+        update_count = '0'
+    update_text = "Spybot Search and Destroy installed " + str(update_count) + " updates"
+    if "Unable" in application.UpdateSpybotSearchDestroy["Edit"].WindowText():
+        update_text += ", but errors were encountered. This is normal and the scan will continue"
+    update_text += "."
+    log.info(update_text)
+    post_event(update_text)
+    application.UpdateSpybotSearchDestroy.Close()
+
+    # Scan
+    application.start("C:\Program Files (x86)\Spybot - Search & Destroy 2\SDScan.exe")
+    time.sleep(10)
+    application.SystemScanSpybotSearchDestroy.StartaScan.ClickInput()
+    while application.SystemScanSpybotSearchDestroy["Button2"].WindowText() == 'Stop scan':
+        time.sleep(10)
+    # Button changes control number 2->3
+    application.SystemScanSpybotSearchDestroy["Button3"].Wait("exists enabled visible ready")
+    if application.SystemScanSpybotSearchDestroy["Button3"].WindowText() == 'Show scan results':
+        application.SystemScanSpybotSearchDestroy.Showscanresults.ClickInput()
+    item_count = ListViewWrapper(application.SystemScanSpybotSearchDestroy.TListView.handle).ItemCount()
+    if item_count > 0:
+        application.SystemScanSpybotSearchDestroy.Fixselected.ClickInput()
+        time.sleep(30)
+    application.SystemScanSpybotSearchDestroy.Close()
+    return "Spybot detected and removed " + str(item_count) + " threats."
 
 
 # Function to defer run_sb
@@ -1213,6 +1252,7 @@ def rem_scans():
             application.start("C:\Program Files (x86)\Spybot - Search & Destroy 2\unins000.exe")
         except UserWarning:
             pass
+        time.sleep(1)
         try:
             application.connect(title_re=".*Spybot - Search & Destroy Uninstall.*")
         except UserWarning:
