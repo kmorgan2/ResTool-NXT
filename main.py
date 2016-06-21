@@ -41,7 +41,7 @@ import _winreg as reg
 import io
 
 # Disable warnings to console
-sys.stderr = open(os.devnull, 'w')
+# sys.stderr = open(os.devnull, 'w')
 
 # THE ALMIGHTY DEBUG FLAG. SET THIS TO TRUE WITH GREAT CAUTION
 DEBUG = True
@@ -71,57 +71,19 @@ heartbeat = "Idle"  # The global for storing/modifying the heartbeat
 
 api_count = 0  # How many times we've requested any API endpoint
 
+# Globals - GUI-dependent
+
+gui = None
+token_manager = None
+safe_mode_tracker = None
+
+
 # Check for Admin
 if not ctypes.windll.shell32.IsUserAnAdmin():
     ctypes.windll.user32.MessageBoxW(0, u"Please make sure to run ResTool with Administrator rights.",
                                      u"Admin Required!", 16)
     log.critical("ResTool was started without admin privileges and was unable to run.")
     sys.exit()
-
-# ------------------------------------------------------ GUI Init ------------------------------------------------------
-
-root = Tk()  # create root window
-tksupport.install(root)  # bind the GUI to a twisted reactor
-root.protocol('WM_DELETE_WINDOW', None)  # unbind the close
-root.iconbitmap('.\\icon.ico')  # icon is icon
-root.title("ResTool NXT 2.0: Beta?")  # title is title
-root.resizable(0, 0)  # prevent resize
-
-# Create necessary styles
-s = Style()
-s.configure('White.TFrame', background='white')
-s.configure('TLabelframe', background='white')
-s.configure('TLabelframe.Label', background='white')
-s.configure('Red.TFrame', background='red')
-s.configure('Red.TLabel', foreground='white', background='red')
-
-
-# And style modifiers
-# ----------------------------------------------------------
-# Function: red_status_area
-# Purpose:  change the coloration of status area to red
-# Preconds: GUI Initialized
-# Postconds:GUI status area is red themed
-# Arguments:
-# ----------------------------------------------------------
-def red_status_area():
-    root_empty_space.configure(style="Red.TFrame")
-    root_progressbar_label.configure(style="Red.TLabel")
-    root.config(background='red')
-
-
-# ----------------------------------------------------------
-# Function: default_status_area
-# Purpose:  change the coloration of the status area to def
-# Preconds: GUI Initialized
-# Postconds:GUI status area is default TTK style
-# Arguments:
-# ----------------------------------------------------------
-def default_status_area():
-    root_empty_space.configure(style="TFrame")
-    root_progressbar_label.configure(style="TLabel")
-    root.configure(background='SystemButtonFace')  # Discovered this is the default background color
-
 
 # ---------------------------------------------------- GUI Classes -----------------------------------------------------
 
@@ -141,7 +103,7 @@ class TokenDialog:
         self.token_manager = token_mgr
         self.token = None
         top = self.top = Toplevel(parent)
-        self.top.title("Enter ResTool Token")
+        self.top.title("Token")
         self.top.iconbitmap('icon.ico')  # icon is icon
 
         self.label = TTKLabel(top, text="Token:")
@@ -152,7 +114,9 @@ class TokenDialog:
         Style().configure("Error.TLabel", foreground='red')
 
         b = TTKButton(top, text="OK", command=self.ok)
-        b.grid(pady=5, columnspan=2)
+        b.grid(pady=5, padx=0, row=1)
+        c = TTKButton(top, text="Cancel", command=self.top.destroy)
+        c.grid(pady=5, padx=0, row=1, column=1)
         self.num.bind('<Return>', lambda event: self.ok())
         self.num.bind('<Escape>', lambda event: self.top.destroy())
         self.num.focus_set()
@@ -200,12 +164,10 @@ class ResToolStatusBar(Frame):
         Frame.__init__(self, master, **kw)
         # Display Windows version in leftmost box
         self.version_text = StringVar(value="Undefined")
-        self.set_version()
         self.version_label = Label(self, textvariable=self.version_text, borderwidth=1, relief=SUNKEN)
         self.version_label.pack(side=LEFT, fill=X, expand=True)
         # Display IP in center box
         self.ip_text = StringVar(value="Not Connected")
-        self.set_ip()
         self.ip_label = Label(self, textvariable=self.ip_text, borderwidth=1, relief=SUNKEN)
         self.ip_label.pack(side=LEFT, fill=X, expand=True)
         # Display token in rightmost box
@@ -213,6 +175,10 @@ class ResToolStatusBar(Frame):
         self.token_label = Label(self, textvariable=self.token_text, anchor=W, borderwidth=1, relief=SUNKEN)
         self.token_label.pack(side=LEFT, fill=X, expand=True)
         self.token_label.bind("<Button-1>", lambda _: token_manager.record_token())
+        self.set_version()
+        self.set_ip()
+
+    def prepare(self):
         self.set_ticket()
 
     # ----------------------------------------------------------
@@ -295,6 +261,8 @@ class Token:
             self.set_token("Offline")
         elif not self.token:  # try to get it from the user
             self.record_token()
+        if not self.token:
+            self.set_token("Offline")
 
     # ----------------------------------------------------------
     # Function: Token::record_token
@@ -306,11 +274,14 @@ class Token:
     def record_token(self):
         global NO_POST
         NO_POST = False
-        td = TokenDialog(root, self)
-        while root.wait_window(td.top):
+        if self.get_token() and not self.get_token == "Offline":
+            self.delete_token()
+        td = TokenDialog(gui.root, self)
+
+        while gui.root.wait_window(td.top):
             time.sleep(5)
         token = td.get_token()
-        if token():
+        if token:
             self.set_token(token)
         if not self.validate_token(accept_offline=False) or not self.get_token():
             self.set_token("Offline")
@@ -318,6 +289,8 @@ class Token:
             log.warn("No valid token supplied; user exited prompt. Operating offline.")
         else:
             log.debug("Token {token} recorded from user", token=self.token)
+        if gui.status_bar:
+            gui.status_bar.set_ticket()
 
     # ----------------------------------------------------------
     # Function: Token::validate_token
@@ -356,7 +329,7 @@ class Token:
                 self.token = str(reg.QueryValueEx(open_registry(), "token")[0])
             except (WindowsError, KeyError):  # The Token Value in the ResTech does not exist. Return placeholder text.
                 self.token = None
-                log.debug("Attempt to get token when none was initialized or stored.")
+                log.debug("Attempted to retrieve token when none stored")
         if validate and not (self.token and self.validate_token(accept_offline=accept_offline)):
             self.record_token()
         return self.token
@@ -372,13 +345,11 @@ class Token:
     def set_token(self, value):
         self.token = value
         try:
-            reg.SetValueEx(open_registry(True), "token", 0, reg.REG_SZ, value)
-            log.info("Recorded new token {token}.", token=self.token)
+            if self.token != "Offline":
+                reg.SetValueEx(open_registry(True), "token", 0, reg.REG_SZ, value)
+                log.info("Recorded new token {token}.", token=self.token)
         except (WindowsError, KeyError):  # This should be impossible. If it happens, something has gone wrong
-            ctypes.windll.user32.MessageBoxW(0, u'Unrecoverable error in writing token to registry.', u'Registry Error',
-                                             16)
-            log.critical("Registry not in valid state when storing token.")
-            sys.exit()
+            log.debug("Attempted to delete token when none stored")
 
     # ----------------------------------------------------------
     # Function: Token::delete_token
@@ -397,9 +368,6 @@ class Token:
                                              u'Registry Error', 16)
             log.critical("Registry not in valid state when removing token.")
             sys.exit()
-
-
-token_manager = Token()  # Initialize the token in global scope
 
 
 # -------------------------------------------------- Safe Mode Class ---------------------------------------------------
@@ -428,10 +396,10 @@ class SafeModeTracker:
         if "safeboot" in output:
             self.safe_mode_set = True
             # Set GUI to reflect safe mode setting
-            msc_button.configure(text="Disable")
+            gui.msc_button.configure(text="Disable")
         else:
             self.safe_mode_set = False
-            msc_button.configure(text="Enable")
+            gui.msc_button.configure(text="Enable")
 
     # ----------------------------------------------------------
     # Function: safeModeTracker::enable_safe_mode
@@ -711,10 +679,10 @@ delete_startup_shortcut()  # Call this ASAP to make sure this is done
 # ----------------------------------------------------------
 def app_defer(function, name):
     log.info("Running {name}", name=name)
-    default_status_area()
-    root_progressbar_label.configure(text="Running " + name)
-    root_progressbar.config(mode='indeterminate')
-    root_progressbar.start()
+    gui.default_status_area()
+    gui.root_progressbar_label.configure(text="Running " + name)
+    gui.root_progressbar.config(mode='indeterminate')
+    gui.root_progressbar.start()
     d = threads.deferToThread(function)
     update_heartbeat("Running " + name)
     d.addCallbacks(app_callback, app_errback, errbackArgs=(name,))
@@ -737,9 +705,9 @@ def app_callback(return_text):
         post_event(return_text)
         update_heartbeat("Idle")
     # reset GUI
-    root_progressbar_label.configure(text="Ready for adventure...")
-    root_progressbar.config(mode='indeterminate')
-    root_progressbar.start()
+    gui.root_progressbar_label.configure(text="Ready for adventure...")
+    gui.root_progressbar.config(mode='indeterminate')
+    gui.root_progressbar.start()
 
 
 # Called on app error
@@ -760,10 +728,10 @@ def app_errback(error, name):
     post_event("While running " + str(name) + ", ResTool encountered an error:\n" + error.getErrorMessage())
     update_heartbeat("Error running " + str(name))
     # set GUI components
-    red_status_area()
-    root_progressbar_label.configure(text="Error in " + name)
-    root_progressbar.config(mode='determinate', value=0)
-    root_progressbar.stop()
+    gui.red_status_area()
+    gui.root_progressbar_label.configure(text="Error in " + name)
+    gui.root_progressbar.config(mode='determinate', value=0)
+    gui.root_progressbar.stop()
 
 
 # ----------------------------------------------------------
@@ -1535,8 +1503,8 @@ def run_winsock_defer():
 # Arguments: 
 # ----------------------------------------------------------
 def run_hidapters():
-    root_progressbar.stop()
-    root_progressbar.config(mode='determinate', value=0)
+    gui.root_progressbar.stop()
+    gui.root_progressbar.config(mode='determinate', value=0)
     post_event("Hidden Adapter Removal started. Completion of this event may not be logged.")
     classes = ["TEREDO", "ISATAP", "TUNMP", "6TO4"]
     progress_increment = 100.0 / (11 * len(classes))
@@ -1544,11 +1512,11 @@ def run_hidapters():
         for instance in range(0, 10):  # remove things the old way
             time.sleep(0.1)
             subprocess.check_call(r'programs\devcon.exe -r remove "@ROOT\*' + adapter + r'\000' + str(instance) + '"')
-            root_progressbar.step(progress_increment)
+            gui.root_progressbar.step(progress_increment)
         # For Win10, everything is virtual and friendly and we can use wildcards
         subprocess.check_call('programs\devcon.exe -r remove *' + adapter + '*')
 
-    root_progressbar.config(value=0)
+    gui.root_progressbar.config(value=0)
 
     return "Hidden Adapter Removal complete."
 
@@ -1874,151 +1842,204 @@ class ResToolWebResponderFactory(Factory):
 # ---------------------------------------------------- Main Program ----------------------------------------------------
 
 # GUI creation (main program initialization)
+class GUIApp(object):
+    def __init__(self):
 
-# --Main Notebook
-root_notebook = Notebook(root)
+        self.root = Tk()  # create root window
+        tksupport.install(self.root)  # bind the GUI to a twisted reactor
+        self.root.protocol('WM_DELETE_WINDOW', None)  # unbind the close
+        self.root.iconbitmap('.\\icon.ico')  # icon is icon
+        self.root.title("ResTool NXT 2.0: Beta?")  # title is title
+        self.root.resizable(0, 0)  # prevent resize
 
-# ----Tab: Virus Scans
-tab__virus_scans = TTKFrame(style='White.TFrame')
-# ------Left Third
-virus_scans__left = TTKFrame(tab__virus_scans, style='White.TFrame')
-av_scanners_group = TTKLabelFrame(virus_scans__left, text="AV Scans")
-cf_button = TTKButton(av_scanners_group, text="ComboFix", command=run_cf_defer, state=DISABLED)
-cf_button.pack(padx=5, pady=5, fill=X)
-mwb_button = TTKButton(av_scanners_group, text="Malwarebytes", command=run_mwb_defer)
-mwb_button.pack(padx=5, pady=5, fill=X)
-eset_button = TTKButton(av_scanners_group, text="ESET", command=run_eset_defer)
-eset_button.pack(padx=5, pady=5, fill=X)
-sas_button = TTKButton(av_scanners_group, text="SAS", command=run_sas_defer)
-sas_button.pack(padx=5, pady=5, fill=X)
-sb_button = TTKButton(av_scanners_group, text="Spybot", command=run_sb_defer)
-sb_button.pack(padx=5, pady=5, fill=X)
-hc_button = TTKButton(av_scanners_group, text="HouseCall", command=run_hc_defer, state=DISABLED)
-hc_button.pack(padx=5, pady=5, fill=X)
-av_scanners_group.grid(sticky=N)
-virus_scans__left.pack(side=LEFT, expand=True, pady=5, fill=X)
-# ------Middle Third
-virus_scans__center = TTKFrame(tab__virus_scans, style='White.TFrame')
-system_cleanup_group = TTKLabelFrame(virus_scans__center, text="Cleanup")
-cc_button = TTKButton(system_cleanup_group, text="CCleaner", command=run_cc_defer)
-cc_button.pack(padx=5, pady=5, fill=X)
-sfc_button = TTKButton(system_cleanup_group, text="SFC", command=run_sfc_defer)
-sfc_button.pack(padx=5, pady=5, fill=X)
-uns_button = TTKButton(system_cleanup_group, text="Rem. Scans", command=rem_scans_defer)
-uns_button.pack(padx=5, pady=5, fill=X)
-system_cleanup_group.grid(row=0, sticky=N)
-rootkit_group = TTKLabelFrame(virus_scans__center, text="Rootkit")
-mwbar_button = TTKButton(rootkit_group, text="MWBAR", command=run_mwbar_defer, state=DISABLED)
-mwbar_button.pack(padx=5, pady=5, fill=X)
-tdss_button = TTKButton(rootkit_group, text="TDSS", command=run_tdss_defer, state=DISABLED)
-tdss_button.pack(padx=5, pady=5, fill=X)
-rootkit_group.grid(row=1, sticky=N)
-virus_scans__center.pack(side=LEFT, expand=True, anchor=N, pady=5, fill=X)
-# ------Right Third
-virus_scans__right = TTKFrame(tab__virus_scans, style='White.TFrame')
-msconfig_group = TTKLabelFrame(virus_scans__right, text="Safe Mode")
-msc_button = TTKButton(msconfig_group, text="Enable", command=msc_toggle)
-msc_button.pack(padx=5, pady=5, fill=X)
-msconfig_group.grid(row=0, sticky=N)
-misc_group = TTKLabelFrame(virus_scans__right, text="Miscellaneous")
-mse_button = TTKButton(misc_group, text="Inst. MSE", command=get_mse_defer)
-mse_button.pack(padx=5, pady=5, fill=X)
-progs_button = TTKButton(misc_group, text="Prog&Feat", command=run_pnf)
-progs_button.pack(padx=5, pady=5, fill=X)
-tfr_button = TTKButton(misc_group, text="Temp Files", command=run_temp_defer)
-tfr_button.pack(padx=5, pady=5, fill=X)
-tic_button = TTKButton(misc_group, text="Ticket", command=run_ticket)
-tic_button.pack(padx=5, pady=5, fill=X)
-misc_group.grid(row=1, sticky=N)
-virus_scans__right.pack(side=LEFT, expand=True, anchor=N, pady=5, fill=X)
-root_notebook.add(tab__virus_scans, text="Virus Scans")
+        # Create necessary styles
+        s = Style()
+        s.configure('White.TFrame', background='white')
+        s.configure('TLabelframe', background='white')
+        s.configure('TLabelframe.Label', background='white')
+        s.configure('Red.TFrame', background='red')
+        s.configure('Red.TLabel', foreground='white', background='red')
 
-# ----Tab:OS Troubleshooting
-tab__os_troubleshooting = TTKFrame(style='White.TFrame')
-# ------Left Third
-os_troubleshooting__left = TTKFrame(tab__os_troubleshooting, style='White.TFrame')
-network_group = TTKLabelFrame(os_troubleshooting__left, text="Network")
-ipc_button = TTKButton(network_group, text="IPConfig", command=run_ipconfig_defer)
-ipc_button.pack(padx=5, pady=5, fill=X)
-wsr_button = TTKButton(network_group, text="Winsock", command=run_winsock_defer)
-wsr_button.pack(padx=5, pady=5, fill=X)
-had_button = TTKButton(network_group, text="Hid. Adapters", command=run_hidapters_defer)
-had_button.pack(padx=5, pady=5, fill=X)
-wzc_button = TTKButton(network_group, text="NIUwireless", command=run_wifi_defer)
-wzc_button.pack(padx=5, pady=5, fill=X)
-sts_button = TTKButton(network_group, text="Speedtest", command=run_speed)
-sts_button.pack(padx=5, pady=5, fill=X)
-ncp_button = TTKButton(network_group, text="Network Cpl.", command=run_netcpl)
-ncp_button.pack(padx=5, pady=5, fill=X)
-network_group.pack()
-os_troubleshooting__left.pack(side=LEFT, expand=True, fill=X, pady=5)
-# ------Middle Third
-os_troubleshooting__center = TTKFrame(tab__os_troubleshooting, style='White.TFrame')
-system_group = TTKLabelFrame(os_troubleshooting__center, text="System")
-sfc2_button = TTKButton(system_group, text="SFC", command=run_sfc_defer)
-sfc2_button.pack(padx=5, pady=5, fill=X)
-dism_button = TTKButton(system_group, text="DISM", command=run_dism_defer)
-dism_button.pack(padx=5, pady=5, fill=X)
-aio_button = TTKButton(system_group, text="All in One", command=run_aio_defer, state=DISABLED)
-aio_button.pack(padx=5, pady=5, fill=X)
-dfg_button = TTKButton(system_group, text="Defragment", command=run_defrag_defer)
-dfg_button.pack(padx=5, pady=5, fill=X)
-ckd_button = TTKButton(system_group, text="Disk Check", command=run_chkdsk_defer)
-ckd_button.pack(padx=5, pady=5, fill=X)
-dmc_button = TTKButton(system_group, text="Device Mgmt.", command=run_dmc)
-dmc_button.pack(padx=5, pady=5, fill=X)
-system_group.pack()
-os_troubleshooting__center.pack(side=LEFT, expand=True, fill=X, pady=5)
-# ------Right Third
-os_troubleshooting__right = TTKFrame(tab__os_troubleshooting, style='White.TFrame')
-miscellaneous_group = TTKLabelFrame(os_troubleshooting__right, text="Miscellaneous")
-rmse_button = TTKButton(miscellaneous_group, text="Remove MSE", command=rem_mse_defer, state=DISABLED)
-rmse_button.pack(padx=5, pady=5, fill=X)
-cpl_button = TTKButton(miscellaneous_group, text="Control Panel", command=run_cpl)
-cpl_button.pack(padx=5, pady=5, fill=X)
-reg_button = TTKButton(miscellaneous_group, text="Registry", command=run_reg)
-reg_button.pack(padx=5, pady=5, fill=X)
-awp_button = TTKButton(miscellaneous_group, text="Pharos", command=run_awp_defer)
-awp_button.pack(padx=5, pady=5, fill=X)
-miscellaneous_group.pack()
-os_troubleshooting__right.pack(side=LEFT, expand=True, anchor=N, fill=X, pady=5)
-root_notebook.add(tab__os_troubleshooting, text="OS Troubleshooting")
+        # --Main Notebook
+        self.root_notebook = Notebook(self.root)
 
-# ----Tab:Removal Tools
-tab__removal_tools = TTKFrame(style='White.TFrame')
-# ------Left Third
-removal_tools__left = TTKFrame(tab__removal_tools, style='White.TFrame')
-removal_tools__left.pack(side=LEFT, expand=True)
-# ------Middle Third
-removal_tools__center = TTKFrame(tab__removal_tools, style='White.TFrame')
-removal_tools__center.pack(side=LEFT, expand=True)
-# ------Right Third
-removal_tools__right = TTKFrame(tab__removal_tools, style='White.TFrame')
-removal_tools__right.pack(side=LEFT, expand=True)
-root_notebook.add(tab__removal_tools, text="Removal Tools", state=DISABLED)
+        # ----Tab: Virus Scans
+        self.tab__virus_scans = TTKFrame(style='White.TFrame')
+        # ------Left Third
+        self.virus_scans__left = TTKFrame(self.tab__virus_scans, style='White.TFrame')
+        self.av_scanners_group = TTKLabelFrame(self.virus_scans__left, text="AV Scans")
+        self.cf_button = TTKButton(self.av_scanners_group, text="ComboFix", command=run_cf_defer, state=DISABLED)
+        self.cf_button.pack(padx=5, pady=5, fill=X)
+        self.mwb_button = TTKButton(self.av_scanners_group, text="Malwarebytes", command=run_mwb_defer)
+        self.mwb_button.pack(padx=5, pady=5, fill=X)
+        self.eset_button = TTKButton(self.av_scanners_group, text="ESET", command=run_eset_defer)
+        self.eset_button.pack(padx=5, pady=5, fill=X)
+        self.sas_button = TTKButton(self.av_scanners_group, text="SAS", command=run_sas_defer)
+        self.sas_button.pack(padx=5, pady=5, fill=X)
+        self.sb_button = TTKButton(self.av_scanners_group, text="Spybot", command=run_sb_defer)
+        self.sb_button.pack(padx=5, pady=5, fill=X)
+        self.hc_button = TTKButton(self.av_scanners_group, text="HouseCall", command=run_hc_defer, state=DISABLED)
+        self.hc_button.pack(padx=5, pady=5, fill=X)
+        self.av_scanners_group.grid(sticky=N)
+        self.virus_scans__left.pack(side=LEFT, expand=True, pady=5, fill=X)
+        # ------Middle Third
+        self.virus_scans__center = TTKFrame(self.tab__virus_scans, style='White.TFrame')
+        self.system_cleanup_group = TTKLabelFrame(self.virus_scans__center, text="Cleanup")
+        self.cc_button = TTKButton(self.system_cleanup_group, text="CCleaner", command=run_cc_defer)
+        self.cc_button.pack(padx=5, pady=5, fill=X)
+        self.sfc_button = TTKButton(self.system_cleanup_group, text="SFC", command=run_sfc_defer)
+        self.sfc_button.pack(padx=5, pady=5, fill=X)
+        self.uns_button = TTKButton(self.system_cleanup_group, text="Rem. Scans", command=rem_scans_defer)
+        self.uns_button.pack(padx=5, pady=5, fill=X)
+        self.system_cleanup_group.grid(row=0, sticky=N)
+        self.rootkit_group = TTKLabelFrame(self.virus_scans__center, text="Rootkit")
+        self.mwbar_button = TTKButton(self.rootkit_group, text="MWBAR", command=run_mwbar_defer, state=DISABLED)
+        self.mwbar_button.pack(padx=5, pady=5, fill=X)
+        self.tdss_button = TTKButton(self.rootkit_group, text="TDSS", command=run_tdss_defer, state=DISABLED)
+        self.tdss_button.pack(padx=5, pady=5, fill=X)
+        self.rootkit_group.grid(row=1, sticky=N)
+        self.virus_scans__center.pack(side=LEFT, expand=True, anchor=N, pady=5, fill=X)
+        # ------Right Third
+        self.virus_scans__right = TTKFrame(self.tab__virus_scans, style='White.TFrame')
+        self.msconfig_group = TTKLabelFrame(self.virus_scans__right, text="Safe Mode")
+        self.msc_button = TTKButton(self.msconfig_group, text="Enable", command=msc_toggle)
+        self.msc_button.pack(padx=5, pady=5, fill=X)
+        self.msconfig_group.grid(row=0, sticky=N)
+        self.misc_group = TTKLabelFrame(self.virus_scans__right, text="Miscellaneous")
+        self.mse_button = TTKButton(self.misc_group, text="Inst. MSE", command=get_mse_defer)
+        self.mse_button.pack(padx=5, pady=5, fill=X)
+        self.progs_button = TTKButton(self.misc_group, text="Prog&Feat", command=run_pnf)
+        self.progs_button.pack(padx=5, pady=5, fill=X)
+        self.tfr_button = TTKButton(self.misc_group, text="Temp Files", command=run_temp_defer)
+        self.tfr_button.pack(padx=5, pady=5, fill=X)
+        self.tic_button = TTKButton(self.misc_group, text="Ticket", command=run_ticket)
+        self.tic_button.pack(padx=5, pady=5, fill=X)
+        self.misc_group.grid(row=1, sticky=N)
+        self.virus_scans__right.pack(side=LEFT, expand=True, anchor=N, pady=5, fill=X)
+        self.root_notebook.add(self.tab__virus_scans, text="Virus Scans")
 
-# ----Tab:Auto
-tab__auto = TTKFrame(style='White.TFrame')
-root_notebook.add(tab__auto, text="Auto")
-auto_button = TTKButton(tab__auto, text="AUTO")
-auto_button.pack(fill=BOTH, expand=True)
-root_notebook.grid(row=0)
+        # ----Tab:OS Troubleshooting
+        self.tab__os_troubleshooting = TTKFrame(style='White.TFrame')
+        # ------Left Third
+        self.os_troubleshooting__left = TTKFrame(self.tab__os_troubleshooting, style='White.TFrame')
+        self.network_group = TTKLabelFrame(self.os_troubleshooting__left, text="Network")
+        self.ipc_button = TTKButton(self.network_group, text="IPConfig", command=run_ipconfig_defer)
+        self.ipc_button.pack(padx=5, pady=5, fill=X)
+        self.wsr_button = TTKButton(self.network_group, text="Winsock", command=run_winsock_defer)
+        self.wsr_button.pack(padx=5, pady=5, fill=X)
+        self.had_button = TTKButton(self.network_group, text="Hid. Adapters", command=run_hidapters_defer)
+        self.had_button.pack(padx=5, pady=5, fill=X)
+        self.wzc_button = TTKButton(self.network_group, text="NIUwireless", command=run_wifi_defer)
+        self.wzc_button.pack(padx=5, pady=5, fill=X)
+        self.sts_button = TTKButton(self.network_group, text="Speedtest", command=run_speed)
+        self.sts_button.pack(padx=5, pady=5, fill=X)
+        self.ncp_button = TTKButton(self.network_group, text="Network Cpl.", command=run_netcpl)
+        self.ncp_button.pack(padx=5, pady=5, fill=X)
+        self.network_group.pack()
+        self.os_troubleshooting__left.pack(side=LEFT, expand=True, fill=X, pady=5)
+        # ------Middle Third
+        self.os_troubleshooting__center = TTKFrame(self.tab__os_troubleshooting, style='White.TFrame')
+        self.system_group = TTKLabelFrame(self.os_troubleshooting__center, text="System")
+        self.sfc2_button = TTKButton(self.system_group, text="SFC", command=run_sfc_defer)
+        self.sfc2_button.pack(padx=5, pady=5, fill=X)
+        self.dism_button = TTKButton(self.system_group, text="DISM", command=run_dism_defer)
+        self.dism_button.pack(padx=5, pady=5, fill=X)
+        self.aio_button = TTKButton(self.system_group, text="All in One", command=run_aio_defer, state=DISABLED)
+        self.aio_button.pack(padx=5, pady=5, fill=X)
+        self.dfg_button = TTKButton(self.system_group, text="Defragment", command=run_defrag_defer)
+        self.dfg_button.pack(padx=5, pady=5, fill=X)
+        self.ckd_button = TTKButton(self.system_group, text="Disk Check", command=run_chkdsk_defer)
+        self.ckd_button.pack(padx=5, pady=5, fill=X)
+        self.dmc_button = TTKButton(self.system_group, text="Device Mgmt.", command=run_dmc)
+        self.dmc_button.pack(padx=5, pady=5, fill=X)
+        self.system_group.pack()
+        self.os_troubleshooting__center.pack(side=LEFT, expand=True, fill=X, pady=5)
+        # ------Right Third
+        self.os_troubleshooting__right = TTKFrame(self.tab__os_troubleshooting, style='White.TFrame')
+        self.miscellaneous_group = TTKLabelFrame(self.os_troubleshooting__right, text="Miscellaneous")
+        self.rmse_button = TTKButton(self.miscellaneous_group, text="Remove MSE", command=rem_mse_defer, state=DISABLED)
+        self.rmse_button.pack(padx=5, pady=5, fill=X)
+        self.cpl_button = TTKButton(self.miscellaneous_group, text="Control Panel", command=run_cpl)
+        self.cpl_button.pack(padx=5, pady=5, fill=X)
+        self.reg_button = TTKButton(self.miscellaneous_group, text="Registry", command=run_reg)
+        self.reg_button.pack(padx=5, pady=5, fill=X)
+        self.awp_button = TTKButton(self.miscellaneous_group, text="Pharos", command=run_awp_defer)
+        self.awp_button.pack(padx=5, pady=5, fill=X)
+        self.miscellaneous_group.pack()
+        self.os_troubleshooting__right.pack(side=LEFT, expand=True, anchor=N, fill=X, pady=5)
+        self.root_notebook.add(self.tab__os_troubleshooting, text="OS Troubleshooting")
 
-root_empty_space = TTKFrame()
-root_empty_space.grid(row=1, pady=5)
-root_progressbar = Progressbar(root, mode="indeterminate")
-root_progressbar.grid(row=2, sticky=E + W, padx=10)
-root_progressbar.start()
-root_progressbar_label = TTKLabel(root, text="Ready for adventure...")
-root_progressbar_label.grid(row=3)
+        # ----Tab:Removal Tools
+        self.tab__removal_tools = TTKFrame(style='White.TFrame')
+        # ------Left Third
+        self.removal_tools__left = TTKFrame(self.tab__removal_tools, style='White.TFrame')
+        self.removal_tools__left.pack(side=LEFT, expand=True)
+        # ------Middle Third
+        self.removal_tools__center = TTKFrame(self.tab__removal_tools, style='White.TFrame')
+        self.removal_tools__center.pack(side=LEFT, expand=True)
+        # ------Right Third
+        self.removal_tools__right = TTKFrame(self.tab__removal_tools, style='White.TFrame')
+        self.removal_tools__right.pack(side=LEFT, expand=True)
+        self.root_notebook.add(self.tab__removal_tools, text="Removal Tools", state=DISABLED)
 
-status_bar = ResToolStatusBar(root)  # create a status bar class object
-status_bar.grid(row=4, sticky=E + W)  # put it on da board
+        # ----Tab:Auto
+        self.tab__auto = TTKFrame(style='White.TFrame')
+        self.root_notebook.add(self.tab__auto, text="Auto")
+        self.auto_button = TTKButton(self.tab__auto, text="AUTO")
+        self.auto_button.pack(fill=BOTH, expand=True)
+        self.root_notebook.grid(row=0)
 
-safe_mode_tracker = SafeModeTracker()
+        self.root_empty_space = TTKFrame()
+        self.root_empty_space.grid(row=1, pady=5)
+        self.root_progressbar = Progressbar(self.root, mode="indeterminate")
+        self.root_progressbar.grid(row=2, sticky=E + W, padx=10)
+        self.root_progressbar.start()
+        self.root_progressbar_label = TTKLabel(self.root, text="Ready for adventure...")
+        self.root_progressbar_label.grid(row=3)
 
-root.protocol('WM_DELETE_WINDOW', stop)  # bind the close
+        self.status_bar = ResToolStatusBar(self.root)  # create a status bar class object
+        self.status_bar.grid(row=4, sticky=E + W)  # put it on da board
 
+        self.root.protocol('WM_DELETE_WINDOW', stop)  # bind the close
+
+    # ----------------------------------------------------------
+    # Function: red_status_area
+    # Purpose:  change the coloration of status area to red
+    # Preconds: GUI Initialized
+    # Postconds:GUI status area is red themed
+    # Arguments:
+    # ----------------------------------------------------------
+    def red_status_area(self):
+        self.root_empty_space.configure(style="Red.TFrame")
+        self.root_progressbar_label.configure(style="Red.TLabel")
+        self.root.config(background='red')
+
+    # ----------------------------------------------------------
+    # Function: default_status_area
+    # Purpose:  change the coloration of the status area to def
+    # Preconds: GUI Initialized
+    # Postconds:GUI status area is default TTK style
+    # Arguments:
+    # ----------------------------------------------------------
+    def default_status_area(self):
+        self.root_empty_space.configure(style="TFrame")
+        self.root_progressbar_label.configure(style="TLabel")
+        self.root.configure(background='SystemButtonFace')  # Discovered this is the default background color
+
+    def prepare(self):
+        self.status_bar.prepare()
+
+
+def init():
+    global gui, safe_mode_tracker, token_manager
+    gui = GUIApp()
+    safe_mode_tracker = SafeModeTracker()
+    token_manager = Token()
+    gui.prepare()  # Make sure heartbeats are posted regularly
+    heartbeat_task = task.LoopingCall(post_heartbeat)
+    heartbeat_task.start(59.9)
+
+reactor.callWhenRunning(init)
 '''endpoint = TCP4ServerEndpoint(reactor, 8000)
 
 
@@ -2053,10 +2074,6 @@ root.protocol('WM_DELETE_WINDOW', stop)  # bind the close
 
 
 reactor.callWhenRunning(listen)'''  # This is code for the remote functionality, which I will leave for future use
-
-# Make sure heartbeats are posted regularly
-heartbeatTask = task.LoopingCall(post_heartbeat)
-heartbeatTask.start(59.9)
 
 # noinspection PyUnresolvedReferences
 reactor.run()
