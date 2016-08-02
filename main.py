@@ -31,8 +31,9 @@ import logging
 # Process/Window Control Imports
 from pywinauto.application import Application
 from pywinauto.controls.common_controls import ListViewWrapper
+from pywinauto.findwindows import WindowNotFoundError
+from pywinauto.timings import TimeoutError
 from win32gui import GetPixel, GetWindowDC, ReleaseDC
-from win32com.client import Dispatch
 import win32clipboard
 import subprocess
 
@@ -77,13 +78,13 @@ gui = None
 token_manager = None
 safe_mode_tracker = None
 
-
 # Check for Admin
 if not ctypes.windll.shell32.IsUserAnAdmin():
     ctypes.windll.user32.MessageBoxW(0, u"Please make sure to run ResTool with Administrator rights.",
                                      u"Admin Required!", 16)
     log.critical("ResTool was started without admin privileges and was unable to run.")
     sys.exit()
+
 
 # ---------------------------------------------------- GUI Classes -----------------------------------------------------
 
@@ -178,6 +179,13 @@ class ResToolStatusBar(Frame):
         self.set_version()
         self.set_ip()
 
+    # ----------------------------------------------------------
+    # Function: ResToolStatusBar::prepare
+    # Purpose:  Finalize setup after GUI is ready
+    # Preconds: GUI Initialized, Token Manager exists
+    # Postconds:Ticket display is filled
+    # Arguments:
+    # ----------------------------------------------------------
     def prepare(self):
         self.set_ticket()
 
@@ -400,6 +408,7 @@ class SafeModeTracker:
         else:
             self.safe_mode_set = False
             gui.msc_button.configure(text="Enable")
+        return self.safe_mode_set
 
     # ----------------------------------------------------------
     # Function: safeModeTracker::enable_safe_mode
@@ -633,28 +642,24 @@ def get_ticket():
 # Arguments:
 # ----------------------------------------------------------
 def create_startup_shortcut():
-    path = os.path.join('C:\ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp', "ResTool.lnk")
-    workingdir = os.path.abspath('.')
-    target = workingdir + '\ResTool NXT.exe'
+    try:
+        subprocess.check_call('schtasks /query /tn "ResTool"')
+    except subprocess.CalledProcessError:
+        workingdir = os.path.abspath('.')
+        target = workingdir + '\ResTool NXT.exe'
 
-    if DEBUG:
-        workingdir += '\\dist'
-        target = workingdir + '\\main.exe'
+        if DEBUG:
+            workingdir += '\\dist'
+            target = workingdir + '\\main.exe'
 
-    shell = Dispatch('WScript.Shell')
-    shortcut = shell.CreateShortCut(path)
-    shortcut.Targetpath = target
-    shortcut.WorkingDirectory = workingdir
-    shortcut.IconLocation = target
-    shortcut.save()
+        subprocess.check_call('schtasks /create /tn "ResTool" /tr "' + target + '" /sc onlogon /rl highest')
 
 
 def delete_startup_shortcut():
     try:
-        os.remove('C:\ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp\ResTool.lnk')
-        log.debug("On launch, restart link detected and removed")
-    except OSError:
-        log.debug("On launch, restart link was not detected.")
+        subprocess.check_call('schtasks /delete /tn "ResTool" /f')
+    except subprocess.CalledProcessError:  # it doesn't exist
+        pass
 
 
 delete_startup_shortcut()  # Call this ASAP to make sure this is done
@@ -861,33 +866,34 @@ def run_mwb_defer():
 # Arguments:
 # ----------------------------------------------------------
 def run_eset():
-    app = Application()
+    application = Application()
     try:
-        app.Start("programs/ESET.exe")
+        application.Start("programs/ESET.exe")
     except UserWarning:  # bitness error
         pass
     time.sleep(0.5)
     try:
-        app.connect(title_re="Terms.*")
+        application.connect(title_re="Terms.*")
     except UserWarning:  # bitness error
         pass
-    app.Termsofuse.YesIaccepttheTermsOfUse.Wait("exists enabled visible ready", 30)
-    app.Termsofuse.YesIaccepttheTermsOfUse.ClickInput()
-    app.Termsofuse.Start.Wait("exists enabled visible ready", 30)
-    app.Termsofuse.Start.ClickInput()
+    application.Termsofuse.YesIaccepttheTermsOfUse.Wait("exists enabled visible ready", 30)
+    application.Termsofuse.YesIaccepttheTermsOfUse.ClickInput()
+    application.Termsofuse.Start.Wait("exists enabled visible ready", 30)
+    application.Termsofuse.Start.ClickInput()
     time.sleep(7)
     try:
-        app.connect(title_re="ESET.*")
+        application.connect(title_re="ESET.*")
     except UserWarning:  # bitness error
         pass
     time.sleep(0.5)
-    app.ESETOnlineScanner.Enableprotectionofpotentiallyunwantedapplications.Wait("exists enabled visible ready", 30)
-    app.ESETOnlineScanner.Enableprotectionofpotentiallyunwantedapplications.ClickInput()
-    app.ESETOnlineScanner.Start.Wait("exists enabled visible ready", 30)
-    app.ESETOnlineScanner.Start.ClickInput()
+    application.ESETOnlineScanner.Enableprotectionofpotentiallyunwantedapplications.Wait("exists enabled visible ready",
+                                                                                         30)
+    application.ESETOnlineScanner.Enableprotectionofpotentiallyunwantedapplications.ClickInput()
+    application.ESETOnlineScanner.Start.Wait("exists enabled visible ready", 30)
+    application.ESETOnlineScanner.Start.ClickInput()
 
     # Wait for scan to finish
-    app.ESETOnlineScanner.Uninstallapplicationonclose.Wait("exists enabled visible ready", 7200)
+    application.ESETOnlineScanner.Uninstallapplicationonclose.Wait("exists enabled visible ready", 7200)
 
     # Grab number of infected from file
     eset_logfile = open('C:\Program Files (x86)\ESET\ESET Online Scanner\log.txt')
@@ -902,10 +908,10 @@ def run_eset():
         raise ValueError(
             "Not all infected files were able to be cleaned!\n\tFound:" + num_found + "\n\tCleaned" + num_cleaned)
 
-    app.ESETOnlineScanner.Uninstallapplicationonclose.ClickInput()
-    app.ESETOnlineScanner.Finish.Wait("exists enabled visible ready", 30)
-    app.ESETOnlineScanner.Finish.ClickInput()
-    if app.ESETOnlineScanner.Close():
+    application.ESETOnlineScanner.Uninstallapplicationonclose.ClickInput()
+    application.ESETOnlineScanner.Finish.Wait("exists enabled visible ready", 30)
+    application.ESETOnlineScanner.Finish.ClickInput()
+    if application.ESETOnlineScanner.Close():
         return str(num_found) + " detections."
 
 
@@ -922,47 +928,51 @@ def run_eset_defer():
 # Arguments: 
 # ----------------------------------------------------------
 def run_sas():
-    app = Application()
+    application = Application()
     try:
-        app.Start("programs/SAS.exe")
+        application.Start("programs/SAS.exe")
     except UserWarning:  # bitness error
         pass
     time.sleep(1)
     try:
-        app.connect(title_re="SUPERAntiSpyware.*")
+        application.connect(title_re="SUPERAntiSpyware.*")
     except UserWarning:  # bitness error
         pass
-    app.SUPERAntiSpywareFreeEditionSetup.Next.Wait("exists enabled visible ready", 30)
-    app.SUPERAntiSpywareFreeEditionSetup.Next.ClickInput()
-    app.SUPERAntiSpywareFreeEditionSetup.IAgree.Wait("exists enabled visible ready", 30)
-    app.SUPERAntiSpywareFreeEditionSetup.IAgree.ClickInput()
-    app.SUPERAntiSpywareFreeEditionSetup.Onlyformecurrentuser.Wait("exists enabled visible ready", 30)
-    app.SUPERAntiSpywareFreeEditionSetup.Onlyformecurrentuser.ClickInput()
-    app.SUPERAntiSpywareFreeEditionSetup.Next.Wait("exists enabled visible ready", 30)
-    app.SUPERAntiSpywareFreeEditionSetup.Next.ClickInput()
-    app.SUPERAntiSpywareFreeEditionSetup.Next.Wait("exists enabled visible ready", 30)
-    app.SUPERAntiSpywareFreeEditionSetup.Next.ClickInput()
-    app.SUPERAntiSpywareFreeEditionSetup.Next.Wait("exists enabled visible ready", 30)
-    app.SUPERAntiSpywareFreeEditionSetup.Next.ClickInput()
-    app.SUPERAntiSpywareFreeEditionSetup.Finished.Wait("exists enabled visible ready", 30)
-    app.SUPERAntiSpywareFreeEditionSetup.Finished.ClickInput()
-    time.sleep(4)
+    application.SUPERAntiSpywareFreeEditionSetup.Next.Wait("exists enabled visible ready", 30)
+    application.SUPERAntiSpywareFreeEditionSetup.Next.ClickInput()
+    application.SUPERAntiSpywareFreeEditionSetup.IAgree.Wait("exists enabled visible ready", 30)
+    application.SUPERAntiSpywareFreeEditionSetup.IAgree.ClickInput()
+    application.SUPERAntiSpywareFreeEditionSetup.Next.Wait("exists enabled visible ready", 30)
+    application.SUPERAntiSpywareFreeEditionSetup.Next.ClickInput()
+    application.SUPERAntiSpywareFreeEditionSetup.Next.Wait("exists enabled visible ready", 30)
+    application.SUPERAntiSpywareFreeEditionSetup.Next.ClickInput()
+    application.SUPERAntiSpywareFreeEditionSetup.Next.Wait("exists enabled visible ready", 3600)
+    application.SUPERAntiSpywareFreeEditionSetup.Next.ClickInput()
+    application.SUPERAntiSpywareFreeEditionSetup.Finished.Wait("exists enabled visible ready", 30)
+    application.SUPERAntiSpywareFreeEditionSetup.Finished.ClickInput()
+    time.sleep(10)
     try:
-        app.connect(title_re=".*Trial*").connect(title_re=".*Trial*")
+        application.connect(title_re=".*Trial*").connect(title_re=".*Trial*")
     except UserWarning:  # bitness error
         pass
     finally:
-        app.connect(title_re=".*Trial*")
-    app.SUPERAntiSpywareProfessionalTrial.Decline.Wait("exists enabled visible ready", 30)
-    app.SUPERAntiSpywareProfessionalTrial.Decline.ClickInput()
+        application.connect(title_re=".*Trial*")
+    application.SUPERAntiSpywareProfessionalTrial.Decline.Wait("exists enabled visible ready", 30)
+    application.SUPERAntiSpywareProfessionalTrial.Decline.ClickInput()
     time.sleep(2)
     try:
-        app.connect(title_re=".*Edition")
+        application.connect(title_re=".*Edition")
     except UserWarning:  # bitness error
         pass
+
+    # Update
+    application.SUPERAntiSpywareFreeEdition.Clickheretocheckforupdates.ClickInput()
+    time.sleep(120)
+    application.SuperAntiSpywareFreeEdition.Button.ClickInput()
     # Click scan
-    app.SUPERAntiSpywareFreeEdition[u'5'].ClickInput()
-    app.SUPERAntiSpywareFreeEdition.ClickInput(coords=(500, 150))
+    application.SUPERAntiSpywareFreeEdition.Button5.ClickInput()
+    application.SuperAntiSpywareFreeEdition.HighBoost.ClickInput()  # for Q
+    application.SUPERAntiSpywareFreeEdition.Button3.ClickInput()
 
     # ----------------------------------------------------------
     # Function: run_sas::get_color
@@ -981,8 +991,8 @@ def run_sas():
         ReleaseDC(handle, dc)
         return (color & 0xff), ((color >> 8) & 0xff), ((color >> 16) & 0xff)
 
-    # Wait for "Finish" button to appear
-    while get_color(app.SUPERAntiSpywareFreeEdition, 350, 478) != (49, 58, 63):  # todo: Coords wrong
+    # Wait for Scan results
+    while get_color(application.SUPERAntiSpywareFreeEdition, 350, 478) != (49, 58, 63):
         time.sleep(5)
 
     return None
@@ -1220,7 +1230,48 @@ def rem_scans():
         os.rmdir("C:\\Program Files (x86)\\ESET\\ESET Online Scanner\\")
         uninstalled_programs.append("ESET")
     # remove SAS
-    # todo: implement SAS removal
+    if os.path.isfile("C:\Program Files\SUPERAntiSpyware\Uninstall.exe"):
+        try:
+            application.start("C:\Program Files\SUPERAntiSpyware\Uninstall.exe")
+        except UserWarning:
+            pass
+        application.SUPERAntiSpywareUninstaller.OK.ClickInput()
+        time.sleep(10)
+        application.connect(title_re=".*SUPERAntiSpyware Uninstall.*")
+        application.SUPERAntiSpywareUninstall.Yes.ClickInput()
+        # Close whatever browser just popped up.
+        try:
+            try:
+                application.connect(title_re=".*Internet.*")
+            except UserWarning:
+                pass
+            application.Window_().Close()
+        except (WindowNotFoundError, TimeoutError):
+            pass
+        try:
+            try:
+                application.connect(title_re=".*Chrome.*")
+            except UserWarning:
+                pass
+            application.Window_().Close()
+        except (WindowNotFoundError, TimeoutError):
+            pass
+        try:
+            try:
+                application.connect(title_re=".*Firefox.*")
+            except UserWarning:
+                pass
+            application.Window_().Close()
+        except (WindowNotFoundError, TimeoutError):
+            pass
+        try:
+            try:
+                application.connect(title_re=".*Edge.*")
+            except UserWarning:
+                pass
+            application.Window_().Close()
+        except (WindowNotFoundError, TimeoutError):
+            pass
     # remove SB
     if os.path.isfile("C:\Program Files (x86)\Spybot - Search & Destroy 2\unins000.exe"):
         try:
@@ -1633,7 +1684,161 @@ def run_dism_defer():
 # Arguments: 
 # ----------------------------------------------------------
 def run_aio():
-    return None
+    global safe_mode_tracker
+    if not safe_mode_tracker.get_safe_mode_setting():
+        raise UserWarning("Computer needs to be in safe mode to run AIO.")
+
+    application = Application()
+    if os.path.isfile("C:\Program Files (x86)\Tweaking.com\Windows Repair (All in One)\Repair_Windows.exe"):
+        try:
+            application.start("C:\Program Files (x86)\Tweaking.com\Windows Repair (All in One)\Repair_Windows.exe")
+        except UserWarning:  # bitness error
+            pass
+        time.sleep(3)
+    else:
+        update_heartbeat("Installing AIO")
+        try:
+            application.Start("programs/AIO.exe")
+        except UserWarning:  # bitness error
+            pass
+        time.sleep(0.25)
+
+        application.TweakingComWindowsRepairSetup.Wait("exists enabled visible ready", 30)
+        application.TweakingComWindowsRepairSetup.Next.Wait("exists enabled visible ready", 30)
+        application.TweakingComWindowsRepairSetup.Next.ClickInput()
+
+        application.TweakingComWindowsRepairSetup.Next.Wait("exists enabled visible ready", 30)
+        application.TweakingComWindowsRepairSetup.Next.ClickInput()
+
+        application.TweakingComWindowsRepairSetup.Next.Wait("exists enabled visible ready", 30)
+        application.TweakingComWindowsRepairSetup.Next.ClickInput()
+
+        application.TweakingComWindowsRepairSetup.Next.Wait("exists enabled visible ready", 30)
+        application.TweakingComWindowsRepairSetup.Next.ClickInput()
+
+        # wait because it's installing
+        application.TweakingComWindowsRepairSetup.Next.Wait("exists enabled visible ready", 3600)
+        application.TweakingComWindowsRepairSetup.Next.ClickInput()
+
+        application.TweakingComWindowsRepairSetup.Finish.Wait("exists enabled visible ready", 30)
+        application.TweakingComWindowsRepairSetup.Finish.ClickInput()
+
+        time.sleep(5)
+        try:
+            application.connect(best_match="Tweaking.com - Windows Repair")
+        except UserWarning:  # bitness error
+            pass
+        time.sleep(1)
+
+    # Step 1
+    update_heartbeat("AIO Pre-Scan Step 1: Power Reset")
+    application.TweakingcomWindowsRepairFreeVersion.Wait("exists enabled visible ready", 30)
+    application.TweakingcomWindowsRepairFreeVersion.ThunderRT6UserControlDC5.Wait("exists enabled visible ready", 30)
+    application.TweakingcomWindowsRepairFreeVersion.ThunderRT6UserControlDC5.ClickInput()  # next arrow
+    # Step 2
+    update_heartbeat("AIO Pre-Scan Step 2: Pre-Scan Check")
+    application.TweakingcomWindowsRepairFreeVersion.ThunderRT6UserControlDC6.Wait("exists enabled visible ready", 30)
+    application.TweakingcomWindowsRepairFreeVersion.ThunderRT6UserControlDC6.ClickInput()  # open pre-scan
+
+    application.PreScan.Wait("exists enabled visible ready", 30)
+    application.PreScan.ThunderRT6UserControlDC6.Wait("exists enabled visible ready", 30)
+    application.PreScan.ThunderRT6UserControlDC6.ClickInput()
+
+    # wait for pre-scan to finish
+    application.PreScan.ThunderRT6UserControlDC6.Wait("exists enabled visible ready", 36000)
+
+    update_heartbeat("!!!WAITING FOR INPUT!!!")
+
+    if ctypes.windll.user32.MessageBoxW(0, u"Does AIO indicate pre-scan errors?",
+                                        u"Restart?", 52) == 6:
+        ctypes.windll.user32.MessageBoxW(0, u"Perform the repairs as indicated and click OK when they have completed",
+                                         u"Perform Repairs", 48)
+
+    update_heartbeat("AIO Pre-Scan Step 2: Pre-Scan Check")
+
+    application.PreScan.ThunderRT6UserControlDC0.ClickInput(coords=(700, 18))
+
+    application.TweakingcomWindowsRepairFreeVersion.Wait("exists enabled visible ready", 30)
+    application.TweakingcomWindowsRepairFreeVersion.ThunderRT6UserControlDC8.Wait("exists enabled visible ready", 30)
+    application.TweakingcomWindowsRepairFreeVersion.ThunderRT6UserControlDC8.ClickInput()
+
+    # Step 3
+    update_heartbeat("AIO Pre-Scan Step 3: File System Integrity Check")
+    application.TweakingcomWindowsRepairFreeVersion.ThunderRT6UserControlDC6.Wait("exists enabled visible ready", 30)
+    application.TweakingcomWindowsRepairFreeVersion.ThunderRT6UserControlDC6.ClickInput()
+
+    while application.CheckDiskOutput.Exists():
+        time.sleep(1)
+
+    update_heartbeat("!!!WAITING FOR INPUT!!!")
+
+    if ctypes.windll.user32.MessageBoxW(0, u"Does AIO indicate we should restart and perform a disk check?",
+                                        u"Restart?", 52) == 6:
+        post_event("Restarting to perform file system repairs")
+        create_startup_shortcut()
+        subprocess.check_call(['fsutil', 'set', 'dirty'])
+        subprocess.check_call(['shutdown', '/t', '0', '/r', '/f'])
+
+    update_heartbeat("AIO Pre-Scan Step 3: File System Integrity Check")
+
+    application.TweakingcomWindowsRepairFreeVersion.ThunderRT6UserControlDC8.Wait("exists enabled visible ready", 30)
+    application.TweakingcomWindowsRepairFreeVersion.ThunderRT6UserControlDC8.ClickInput()
+
+    # Step 4
+    update_heartbeat("AIO Pre-Scan Step 4: System File Check")
+    application.TweakingcomWindowsRepairFreeVersion.ThunderRT6UserControlDC5.Wait("exists enabled visible ready", 30)
+    application.TweakingcomWindowsRepairFreeVersion.ThunderRT6UserControlDC5.ClickInput()
+
+    try:
+        application.connect(title_re="Administrator*")
+    except UserWarning:  # bitness error
+        pass
+
+    while application.AdministratorSystemFileCheck.Exists():
+        time.sleep(1)
+        application.AdministratorSystemFileCheck.TypeKeys("{SPACE}", with_spaces=True)
+
+    try:
+        application.connect(best_match="Tweaking.com - Windows Repair")
+    except UserWarning:  # bitness error
+        pass
+    time.sleep(1)
+
+    application.TweakingcomWindowsRepairFreeVersion.ThunderRT6UserControlDC7.Wait("exists enabled visible ready", 30)
+    application.TweakingcomWindowsRepairFreeVersion.ThunderRT6UserControlDC7.ClickInput()
+
+    # Step 5
+    update_heartbeat("AIO Pre-Scan Step 5: Backup")
+    application.TweakingcomWindowsRepairFreeVersion.ThunderRT6UserControlDC6.Wait("exists enabled visible ready", 30)
+    application.TweakingcomWindowsRepairFreeVersion.ThunderRT6UserControlDC6.ClickInput()
+
+    while application.TweakingComRegistryBackup.Exists():
+        time.sleep(1)
+
+    application.TweakingcomWindowsRepairFreeVersion.ThunderRT6UserControlDC9.Wait("exists enabled visible ready", 30)
+    application.TweakingcomWindowsRepairFreeVersion.ThunderRT6UserControlDC9.ClickInput()
+    application.TweakingcomWindowsRepairFreeVersion.ThunderRT6UserControlDC9.Wait("exists enabled visible ready", 3600)
+
+    # Repairs
+
+    post_event("AIO Scans Started. This may take SEVERAL HOURS to complete. The computer will restart automatically.")
+    update_heartbeat("AIO Scans Started ")
+    application.TweakingcomWindowsRepairFreeVersion.ThunderRT6UserControlDC5.Wait("exists enabled visible ready", 30)
+    application.TweakingcomWindowsRepairFreeVersion.ThunderRT6UserControlDC5.ClickInput()
+
+    time.sleep(5)
+    application.TweakingcomWindowsRepairFreeVersion.Wait("exists enabled visible ready", 30)
+    application.TweakingcomWindowsRepairFreeVersion.ThunderRT6UserControlDC13.Wait("exists enabled visible ready", 30)
+    application.TweakingcomWindowsRepairFreeVersion.ThunderRT6UserControlDC13.ClickInput()
+
+    application.TweakingcomWindowsRepair.Wait("exists enabled visible ready", 36000)
+    application.TweakingcomWindowsRepair.Yes.Wait("exsits enabled visible ready", 72000)
+
+    # log restarting
+    post_event("AIO Scans Completed. The computer will restart shortly.")
+    update_heartbeat("AIO Scans Completed. Restarting ", 3600)
+    create_startup_shortcut()
+    application.TweakingcomWindowsRepair.Yes.ClickInput()
 
 
 # Function to defer run_aio
@@ -1844,7 +2049,6 @@ class ResToolWebResponderFactory(Factory):
 # GUI creation (main program initialization)
 class GUIApp(object):
     def __init__(self):
-
         self.root = Tk()  # create root window
         tksupport.install(self.root)  # bind the GUI to a twisted reactor
         self.root.protocol('WM_DELETE_WINDOW', None)  # unbind the close
@@ -1944,7 +2148,7 @@ class GUIApp(object):
         self.sfc2_button.pack(padx=5, pady=5, fill=X)
         self.dism_button = TTKButton(self.system_group, text="DISM", command=run_dism_defer)
         self.dism_button.pack(padx=5, pady=5, fill=X)
-        self.aio_button = TTKButton(self.system_group, text="All in One", command=run_aio_defer, state=DISABLED)
+        self.aio_button = TTKButton(self.system_group, text="All in One", command=run_aio_defer)
         self.aio_button.pack(padx=5, pady=5, fill=X)
         self.dfg_button = TTKButton(self.system_group, text="Defragment", command=run_defrag_defer)
         self.dfg_button.pack(padx=5, pady=5, fill=X)
@@ -2003,7 +2207,7 @@ class GUIApp(object):
         self.root.protocol('WM_DELETE_WINDOW', stop)  # bind the close
 
     # ----------------------------------------------------------
-    # Function: red_status_area
+    # Function: GUIApp::red_status_area
     # Purpose:  change the coloration of status area to red
     # Preconds: GUI Initialized
     # Postconds:GUI status area is red themed
@@ -2015,7 +2219,7 @@ class GUIApp(object):
         self.root.config(background='red')
 
     # ----------------------------------------------------------
-    # Function: default_status_area
+    # Function: GUIApp::default_status_area
     # Purpose:  change the coloration of the status area to def
     # Preconds: GUI Initialized
     # Postconds:GUI status area is default TTK style
@@ -2026,6 +2230,13 @@ class GUIApp(object):
         self.root_progressbar_label.configure(style="TLabel")
         self.root.configure(background='SystemButtonFace')  # Discovered this is the default background color
 
+    # ----------------------------------------------------------
+    # Function: GUIApp::prepare
+    # Purpose:  set up an GUI after related controls exist
+    # Preconds: we have a SafeModeTracker and Token
+    # Postconds:status bar has statuses in it and is a bar
+    # Arguments:
+    # ----------------------------------------------------------
     def prepare(self):
         self.status_bar.prepare()
 
@@ -2038,6 +2249,7 @@ def init():
     gui.prepare()  # Make sure heartbeats are posted regularly
     heartbeat_task = task.LoopingCall(post_heartbeat)
     heartbeat_task.start(59.9)
+
 
 reactor.callWhenRunning(init)
 '''endpoint = TCP4ServerEndpoint(reactor, 8000)
