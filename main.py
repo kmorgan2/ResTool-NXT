@@ -37,12 +37,15 @@ from win32gui import GetPixel, GetWindowDC, ReleaseDC
 import win32clipboard
 import subprocess
 
-# Registry and File Manipulation
+# Registry and File Manipulation0
 import _winreg as reg
 import io
 
 # Disable warnings to console
-# sys.stderr = open(os.devnull, 'w')
+sys.stderr = open(os.devnull, 'w')
+# Disable output to console
+sys.stdout = open(os.devnull, 'w')
+
 
 # THE ALMIGHTY DEBUG FLAG. SET THIS TO TRUE WITH GREAT CAUTION
 DEBUG = True
@@ -56,6 +59,8 @@ logging.getLogger("requests").setLevel(logging.WARNING)
 log.info("Starting ResTool")
 
 # Globals - API
+DIR = os.path.dirname(os.path.realpath(sys.argv[0]))
+
 API_HOST = 'intranet'  # Which subdomain to use (before restech.niu.edu)
 if DEBUG:
     API_HOST = 'dev'  # Subdomain is dev if we're in development
@@ -105,7 +110,7 @@ class TokenDialog:
         self.token = None
         top = self.top = Toplevel(parent)
         self.top.title("Token")
-        self.top.iconbitmap('icon.ico')  # icon is icon
+        self.top.iconbitmap(os.path.dirname(os.path.realpath(sys.argv[0])) + '\\icon.ico')  # icon is icon
 
         self.label = TTKLabel(top, text="Token:")
         self.label.grid(row=0, column=0)
@@ -644,15 +649,17 @@ def get_ticket():
 def create_startup_shortcut():
     try:
         subprocess.check_call('schtasks /query /tn "ResTool"')
+        delete_startup_shortcut()
     except subprocess.CalledProcessError:
-        workingdir = os.path.abspath('.')
-        target = workingdir + '\ResTool NXT.exe'
+        pass
+    workingdir = os.path.abspath('.')
+    target = workingdir + '\ResTool NXT.exe'
 
-        if DEBUG:
-            workingdir += '\\dist'
-            target = workingdir + '\\main.exe'
+    if DEBUG:
+        workingdir += '\\dist'
+        target = workingdir + '\\main.exe'
 
-        subprocess.check_call('schtasks /create /tn "ResTool" /tr "' + target + '" /sc onlogon /rl highest')
+    subprocess.check_call('schtasks /create /tn "ResTool" /tr "' + target + '" /sc onlogon /rl highest')
 
 
 def delete_startup_shortcut():
@@ -772,7 +779,7 @@ def run_mwb():
         time.sleep(3)
     else:
         try:
-            application.Start("programs/MWB.exe")
+            application.Start(os.path.dirname(os.path.realpath(sys.argv[0])) + "/programs/MWB.exe")
         except UserWarning:  # bitness error
             pass
         time.sleep(0.25)
@@ -868,7 +875,7 @@ def run_mwb_defer():
 def run_eset():
     application = Application()
     try:
-        application.Start("programs/ESET.exe")
+        application.Start(os.path.dirname(os.path.realpath(sys.argv[0])) + "programs/ESET.exe")
     except UserWarning:  # bitness error
         pass
     time.sleep(0.5)
@@ -930,7 +937,7 @@ def run_eset_defer():
 def run_sas():
     application = Application()
     try:
-        application.Start("programs/SAS.exe")
+        application.Start(os.path.dirname(os.path.realpath(sys.argv[0])) + "programs/SAS.exe")
     except UserWarning:  # bitness error
         pass
     time.sleep(1)
@@ -1013,7 +1020,7 @@ def run_sas_defer():
 def run_sb():
     application = Application()
     if not os.path.isfile("C:\Program Files (x86)\Spybot - Search & Destroy 2\SDScan.exe"):
-        application.start("programs/SB.exe")
+        application.start(os.path.dirname(os.path.realpath(sys.argv[0])) + "programs/SB.exe")
         time.sleep(2.5)
         application.connect(title_re=".*Select Setup Language.*")
         application.SelectSetupLanguage.OK.ClickInput()
@@ -1079,7 +1086,7 @@ def run_sb_defer():
 # Arguments: 
 # ----------------------------------------------------------
 def run_hc():
-    application = Application().start("programs/HC.exe")
+    application = Application().start(os.path.dirname(os.path.realpath(sys.argv[0])) + "programs/HC.exe")
     time.sleep(2.0)
     application = application.connect(class_name_re="#32770", title=u'')  # connect to window
     application.Dialog[u'4'].ClickInput(coords=(35, 315))  # accept EULA
@@ -1164,7 +1171,7 @@ def run_cc():
     else:
         # install
         try:
-            application.start("programs/CC.exe")
+            application.start(os.path.dirname(os.path.realpath(sys.argv[0])) + "programs/CC.exe")
         except UserWarning:
             pass
         application.CCleanerProfessionalSetup.Next.Wait("exists enabled visible ready", 60)
@@ -1389,7 +1396,7 @@ def get_mse():
         # create application
         application = Application()
         try:
-            application.start("\programs\MSE.exe")
+            application.start(os.path.dirname(os.path.realpath(sys.argv[0])) + "\programs\MSE.exe")
         except UserWarning:
             pass
         application.MicrosoftSecurityEssentials.Wait("exists visible enabled ready", 3600)
@@ -1698,7 +1705,7 @@ def run_aio():
     else:
         update_heartbeat("Installing AIO")
         try:
-            application.Start("programs/AIO.exe")
+            application.Start(os.path.dirname(os.path.realpath(sys.argv[0])) + "programs/AIO.exe")
         except UserWarning:  # bitness error
             pass
         time.sleep(0.25)
@@ -2052,7 +2059,7 @@ class GUIApp(object):
         self.root = Tk()  # create root window
         tksupport.install(self.root)  # bind the GUI to a twisted reactor
         self.root.protocol('WM_DELETE_WINDOW', None)  # unbind the close
-        self.root.iconbitmap('.\\icon.ico')  # icon is icon
+        self.root.iconbitmap(os.path.dirname(os.path.realpath(sys.argv[0])) + '\\icon.ico')  # icon is icon
         self.root.title("ResTool NXT 2.0: Beta?")  # title is title
         self.root.resizable(0, 0)  # prevent resize
 
@@ -2246,7 +2253,8 @@ def init():
     gui = GUIApp()
     safe_mode_tracker = SafeModeTracker()
     token_manager = Token()
-    gui.prepare()  # Make sure heartbeats are posted regularly
+    gui.prepare()
+    # Make sure heartbeats are posted regularly
     heartbeat_task = task.LoopingCall(post_heartbeat)
     heartbeat_task.start(59.9)
 
